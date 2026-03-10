@@ -14,17 +14,29 @@ function validateEnv(): Env {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    const errors = result.error.issues.map((issue) => {
+    const title = '  Missing or invalid environment vars';
+    const hint = '  → Copy .env.example to .env';
+
+    const lines = result.error.issues.map((issue) => {
       const field = issue.path.join('.');
       return `  ✗ ${field}: ${issue.message}`;
     });
 
-    console.error('\n╔══════════════════════════════════════════╗');
-    console.error('║   Missing or invalid environment vars    ║');
-    console.error('╠══════════════════════════════════════════╣');
-    console.error(errors.join('\n'));
-    console.error('╚══════════════════════════════════════════╝');
-    console.error('\n→ Copy .env.example to .env and fill in the values\n');
+    const allLines = [title, ...lines, hint];
+    const WIDTH = Math.max(...allLines.map((l) => l.length)) + 4;
+    const border = '═'.repeat(WIDTH - 2);
+    const pad = (text: string) => {
+      const remaining = WIDTH - 2 - text.length;
+      return `║${text}${' '.repeat(Math.max(0, remaining))}║`;
+    };
+
+    console.error(`\n╔${border}╗`);
+    console.error(pad(title));
+    console.error(`╠${border}╣`);
+    lines.forEach((line) => console.error(pad(line)));
+    console.error(`╠${border}╣`);
+    console.error(pad(hint));
+    console.error(`╚${border}╝\n`);
 
     process.exit(1);
   }
