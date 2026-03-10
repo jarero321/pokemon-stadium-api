@@ -3,9 +3,15 @@ import { z } from 'zod/v4';
 const envSchema = z.object({
   PORT: z.coerce.number().default(8080),
   HOST: z.string().default('0.0.0.0'),
-  MONGODB_URI: z.url({ message: 'MONGODB_URI must be a valid connection string' }),
-  POKEMON_API_BASE_URL: z.url({ message: 'POKEMON_API_BASE_URL must be a valid URL' }),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  MONGODB_URI: z.url({
+    message: 'MONGODB_URI must be a valid connection string',
+  }),
+  POKEMON_API_BASE_URL: z.url({
+    message: 'POKEMON_API_BASE_URL must be a valid URL',
+  }),
+  NODE_ENV: z
+    .enum(['development', 'production', 'test'])
+    .default('development'),
 });
 
 type Env = z.infer<typeof envSchema>;
