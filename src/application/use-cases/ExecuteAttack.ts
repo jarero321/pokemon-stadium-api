@@ -1,4 +1,5 @@
 import type { ILogger } from '#core/interfaces/index.js';
+import type { ITurnLock } from '#core/interfaces/index.js';
 import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { IBattleRepository } from '#core/interfaces/index.js';
 import type { Lobby, BattleTurn } from '#core/entities/index.js';
@@ -23,10 +24,24 @@ export class ExecuteAttack {
   constructor(
     private readonly lobbyRepository: ILobbyRepository,
     private readonly battleRepository: IBattleRepository,
+    private readonly turnLock: ITurnLock,
     private readonly logger: ILogger,
   ) {}
 
   async execute(socketId: string): Promise<AttackResult> {
+    const initialLobby = await this.lobbyRepository.findActive();
+    if (!initialLobby) throw new LobbyNotFoundError();
+
+    const release = await this.turnLock.acquire(initialLobby._id!);
+
+    try {
+      return await this.processAttack(socketId);
+    } finally {
+      release();
+    }
+  }
+
+  private async processAttack(socketId: string): Promise<AttackResult> {
     const lobby = await this.lobbyRepository.findActive();
     if (!lobby) throw new LobbyNotFoundError();
 
