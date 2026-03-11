@@ -1,11 +1,11 @@
-export type { ILogger } from './ILogger.js';
-export type { ITurnLock } from './ITurnLock.js';
-export type { IEventBus, EventHandler } from './IEventBus.js';
-export type { ILobbyRepository } from './ILobbyRepository.js';
-export type { IPlayerRepository } from './IPlayerRepository.js';
-export type { IBattleRepository } from './IBattleRepository.js';
+export type { ILogger } from './ILogger';
+export type { ITurnLock } from './ITurnLock';
+export type { IEventBus, EventHandler } from './IEventBus';
+export type { ILobbyRepository } from './ILobbyRepository';
+export type { IPlayerRepository } from './IPlayerRepository';
+export type { IBattleRepository } from './IBattleRepository';
 export type {
   IPokemonApiService,
   PokemonCatalogItem,
   PokemonDetail,
-} from './IPokemonApiService.js';
+} from './IPokemonApiService';

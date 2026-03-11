@@ -1,4 +1,4 @@
-import type { Pokemon } from './Pokemon.js';
+import type { Pokemon } from './Pokemon';
 
 export interface BattleTurn {
   turnNumber: number;

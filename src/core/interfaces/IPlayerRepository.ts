@@ -1,4 +1,4 @@
-import type { PlayerStats } from '../entities/PlayerStats.js';
+import type { PlayerStats } from '../entities/PlayerStats';
 
 export interface IPlayerRepository {
   findByNickname(nickname: string): Promise<PlayerStats | null>;

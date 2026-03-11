@@ -1,5 +1,5 @@
-import type { LobbyStatus } from '../enums/LobbyStatus.js';
-import type { Player } from './Player.js';
+import type { LobbyStatus } from '../enums/LobbyStatus';
+import type { Player } from './Player';
 
 export interface Lobby {
   _id?: string;

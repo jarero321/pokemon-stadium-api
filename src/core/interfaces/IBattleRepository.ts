@@ -1,4 +1,4 @@
-import type { Battle, BattleTurn, NewBattleTurn } from '../entities/Battle.js';
+import type { Battle, BattleTurn, NewBattleTurn } from '../entities/Battle';
 
 export interface IBattleRepository {
   create(battle: Battle): Promise<Battle>;

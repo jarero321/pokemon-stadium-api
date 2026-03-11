@@ -1,4 +1,4 @@
-import type { Lobby } from '../entities/Lobby.js';
+import type { Lobby } from '../entities/Lobby';
 
 export interface ILobbyRepository {
   findActive(): Promise<Lobby | null>;

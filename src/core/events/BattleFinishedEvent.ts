@@ -1,4 +1,4 @@
-import type { DomainEvent } from './DomainEvent.js';
+import type { DomainEvent } from './DomainEvent';
 
 export interface BattleFinishedEvent extends DomainEvent {
   readonly name: 'BattleFinished';

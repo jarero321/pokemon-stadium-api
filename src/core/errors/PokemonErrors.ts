@@ -1,4 +1,4 @@
-import { BusinessError } from './BusinessError.js';
+import { BusinessError } from './BusinessError';
 
 export class PokemonAlreadyDefeatedError extends BusinessError {
   constructor(pokemonName: string) {

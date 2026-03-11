@@ -1,4 +1,4 @@
-import { BusinessError } from './BusinessError.js';
+import { BusinessError } from './BusinessError';
 
 export class LobbyFullError extends BusinessError {
   constructor() {

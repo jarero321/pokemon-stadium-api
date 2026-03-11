@@ -1,3 +1,3 @@
-export type { DomainEvent } from './DomainEvent.js';
-export type { BattleFinishedEvent } from './BattleFinishedEvent.js';
-export { createBattleFinishedEvent } from './BattleFinishedEvent.js';
+export type { DomainEvent } from './DomainEvent';
+export type { BattleFinishedEvent } from './BattleFinishedEvent';
+export { createBattleFinishedEvent } from './BattleFinishedEvent';

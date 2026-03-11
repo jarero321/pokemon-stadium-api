@@ -1,4 +1,4 @@
-import { PokemonType } from './enums/PokemonType.js';
+import { PokemonType } from './enums/PokemonType';
 
 type EffectivenessMap = Record<string, Record<string, number>>;
 
