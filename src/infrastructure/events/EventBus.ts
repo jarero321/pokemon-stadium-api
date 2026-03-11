@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
-import type { IEventBus, EventHandler } from '#core/interfaces/IEventBus.js';
-import type { DomainEvent } from '#core/events/DomainEvent.js';
-import type { ILogger } from '#core/interfaces/ILogger.js';
+import type { IEventBus, EventHandler } from '@core/interfaces/IEventBus';
+import type { DomainEvent } from '@core/events/DomainEvent';
+import type { ILogger } from '@core/interfaces/ILogger';
 
 export class EventBus implements IEventBus {
   private readonly emitter = new EventEmitter();

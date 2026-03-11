@@ -1,5 +1,5 @@
 import pino from 'pino';
-import type { ILogger } from '#core/interfaces/index.js';
+import type { ILogger } from '@core/interfaces/index';
 
 export class PinoLogger implements ILogger {
   private readonly logger: pino.Logger;

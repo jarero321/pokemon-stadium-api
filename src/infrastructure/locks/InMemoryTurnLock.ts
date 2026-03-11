@@ -1,22 +1,20 @@
-import type { ITurnLock } from '#core/interfaces/ITurnLock.js';
+import type { ITurnLock } from '@core/interfaces/ITurnLock';
 
 export class InMemoryTurnLock implements ITurnLock {
-  private locks = new Map<string, Promise<void>>();
+  private pending: Promise<void> | null = null;
 
-  async acquire(lobbyId: string): Promise<() => void> {
-    while (this.locks.has(lobbyId)) {
-      await this.locks.get(lobbyId);
+  async acquire(): Promise<() => void> {
+    while (this.pending) {
+      await this.pending;
     }
 
     let release!: () => void;
-    const promise = new Promise<void>((resolve) => {
+    this.pending = new Promise<void>((resolve) => {
       release = resolve;
     });
 
-    this.locks.set(lobbyId, promise);
-
     return () => {
-      this.locks.delete(lobbyId);
+      this.pending = null;
       release();
     };
   }
