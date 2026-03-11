@@ -38,3 +38,12 @@ export class InvalidSwitchError extends BusinessError {
     super('INVALID_SWITCH', reason);
   }
 }
+
+export class InvalidPlayerStatusError extends BusinessError {
+  constructor(expected: string, actual: string) {
+    super(
+      'INVALID_PLAYER_STATUS',
+      `Player must be in '${expected}' status, but is '${actual}'`,
+    );
+  }
+}

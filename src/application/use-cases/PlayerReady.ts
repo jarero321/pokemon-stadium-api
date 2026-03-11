@@ -2,12 +2,12 @@ import type { ILogger } from '#core/interfaces/index.js';
 import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { IBattleRepository } from '#core/interfaces/index.js';
 import type { Lobby } from '#core/entities/index.js';
-import { LobbyStatus } from '#core/enums/index.js';
+import { LobbyStatus, PlayerStatus } from '#core/enums/index.js';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   LobbyNotInStateError,
-  TeamNotAssignedError,
+  InvalidPlayerStatusError,
 } from '#core/errors/index.js';
 
 export class PlayerReady {
@@ -30,22 +30,24 @@ export class PlayerReady {
     const player = lobby.players.find((p) => p.socketId === socketId);
     if (!player) throw new PlayerNotInLobbyError();
 
-    if (player.team.length === 0) {
-      throw new TeamNotAssignedError();
+    if (player.status !== PlayerStatus.TEAM_ASSIGNED) {
+      throw new InvalidPlayerStatusError(
+        PlayerStatus.TEAM_ASSIGNED,
+        player.status,
+      );
     }
 
-    player.ready = true;
+    player.status = PlayerStatus.READY;
 
     this.logger.info('Player marked as ready', {
       nickname: player.nickname,
     });
 
     const allReady =
-      lobby.players.length === 2 && lobby.players.every((p) => p.ready);
+      lobby.players.length === 2 &&
+      lobby.players.every((p) => p.status === PlayerStatus.READY);
 
     if (allReady) {
-      lobby.status = LobbyStatus.READY;
-
       const battle = await this.battleRepository.create({
         players: lobby.players.map((p) => ({
           nickname: p.nickname,
@@ -60,6 +62,10 @@ export class PlayerReady {
 
       lobby.battleId = battle._id!;
       lobby.status = LobbyStatus.BATTLING;
+
+      lobby.players.forEach((p) => {
+        p.status = PlayerStatus.BATTLING;
+      });
 
       const p1Speed = lobby.players[0].team[0].speed;
       const p2Speed = lobby.players[1].team[0].speed;

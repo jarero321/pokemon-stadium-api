@@ -3,9 +3,11 @@ import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { IPokemonApiService } from '#core/interfaces/index.js';
 import type { Lobby } from '#core/entities/index.js';
 import type { Pokemon } from '#core/entities/index.js';
+import { PlayerStatus } from '#core/enums/index.js';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
+  InvalidPlayerStatusError,
 } from '#core/errors/index.js';
 
 export class AssignPokemon {
@@ -21,6 +23,10 @@ export class AssignPokemon {
 
     const player = lobby.players.find((p) => p.socketId === socketId);
     if (!player) throw new PlayerNotInLobbyError();
+
+    if (player.status !== PlayerStatus.JOINED) {
+      throw new InvalidPlayerStatusError(PlayerStatus.JOINED, player.status);
+    }
 
     const catalog = await this.pokemonApi.getList();
 
@@ -48,6 +54,7 @@ export class AssignPokemon {
     );
 
     player.activePokemonIndex = 0;
+    player.status = PlayerStatus.TEAM_ASSIGNED;
     lobby.updatedAt = new Date();
 
     const updated = await this.lobbyRepository.update(lobby);

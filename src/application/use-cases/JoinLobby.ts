@@ -1,10 +1,11 @@
 import type { ILogger } from '#core/interfaces/index.js';
 import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { Lobby } from '#core/entities/index.js';
-import { LobbyStatus } from '#core/enums/index.js';
+import { LobbyStatus, PlayerStatus } from '#core/enums/index.js';
 import {
   LobbyFullError,
   PlayerAlreadyInLobbyError,
+  LobbyNotInStateError,
 } from '#core/errors/index.js';
 
 export class JoinLobby {
@@ -35,6 +36,10 @@ export class JoinLobby {
       });
     }
 
+    if (lobby.status !== LobbyStatus.WAITING) {
+      throw new LobbyNotInStateError(LobbyStatus.WAITING, lobby.status);
+    }
+
     if (lobby.players.length >= 2) {
       throw new LobbyFullError();
     }
@@ -47,9 +52,9 @@ export class JoinLobby {
     lobby.players.push({
       nickname,
       socketId,
+      status: PlayerStatus.JOINED,
       team: [],
       activePokemonIndex: 0,
-      ready: false,
     });
 
     lobby.updatedAt = new Date();

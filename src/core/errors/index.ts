@@ -12,4 +12,5 @@ export {
   PlayerNotInLobbyError,
   TeamNotAssignedError,
   InvalidSwitchError,
+  InvalidPlayerStatusError,
 } from './BattleErrors.js';
