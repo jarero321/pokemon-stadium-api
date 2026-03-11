@@ -1,15 +1,15 @@
-import type { ILogger } from '#core/interfaces/index.js';
-import type { ITurnLock } from '#core/interfaces/index.js';
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { Lobby } from '#core/entities/index.js';
-import { LobbyStatus } from '#core/enums/index.js';
+import type { ILogger } from '@core/interfaces/index';
+import type { ITurnLock } from '@core/interfaces/index';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { Lobby } from '@core/entities/index';
+import { LobbyStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   NotYourTurnError,
   BattleNotActiveError,
   InvalidSwitchError,
-} from '#core/errors/index.js';
+} from '@core/errors/index';
 
 export class SwitchPokemon {
   constructor(
@@ -18,69 +18,73 @@ export class SwitchPokemon {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(socketId: string, pokemonIndex: number): Promise<Lobby> {
-    const initialLobby = await this.lobbyRepository.findActive();
-    if (!initialLobby) throw new LobbyNotFoundError();
-
-    const release = await this.turnLock.acquire(initialLobby._id!);
+  async execute(playerId: string, targetPokemonIndex: number): Promise<Lobby> {
+    const release = await this.turnLock.acquire();
 
     try {
-      return await this.processSwitch(socketId, pokemonIndex);
+      const lobby = await this.lobbyRepository.findActive();
+      if (!lobby) throw new LobbyNotFoundError();
+
+      return await this.processSwitch(playerId, targetPokemonIndex, lobby);
     } finally {
       release();
     }
   }
 
   private async processSwitch(
-    socketId: string,
-    pokemonIndex: number,
+    playerId: string,
+    targetPokemonIndex: number,
+    lobby: Lobby,
   ): Promise<Lobby> {
-    const lobby = await this.lobbyRepository.findActive();
-    if (!lobby) throw new LobbyNotFoundError();
-
     if (lobby.status !== LobbyStatus.BATTLING) {
       throw new BattleNotActiveError();
     }
 
-    const playerIndex = lobby.players.findIndex((p) => p.socketId === socketId);
-    if (playerIndex === -1) throw new PlayerNotInLobbyError();
+    const requestingPlayerIndex = lobby.players.findIndex(
+      (player) => player.playerId === playerId,
+    );
+    if (requestingPlayerIndex === -1) throw new PlayerNotInLobbyError();
 
-    if (lobby.currentTurnIndex !== playerIndex) {
+    if (lobby.currentTurnIndex !== requestingPlayerIndex) {
       throw new NotYourTurnError();
     }
 
-    const player = lobby.players[playerIndex];
+    const requestingPlayer = lobby.players[requestingPlayerIndex];
 
-    if (pokemonIndex === player.activePokemonIndex) {
+    if (targetPokemonIndex === requestingPlayer.activePokemonIndex) {
       throw new InvalidSwitchError('Cannot switch to the same active Pokemon');
     }
 
-    if (pokemonIndex < 0 || pokemonIndex >= player.team.length) {
+    if (
+      targetPokemonIndex < 0 ||
+      targetPokemonIndex >= requestingPlayer.team.length
+    ) {
       throw new InvalidSwitchError('Invalid Pokemon index');
     }
 
-    const targetPokemon = player.team[pokemonIndex];
+    const targetPokemon = requestingPlayer.team[targetPokemonIndex];
     if (targetPokemon.defeated) {
       throw new InvalidSwitchError(
         `${targetPokemon.name} is defeated and cannot battle`,
       );
     }
 
-    const previousPokemon = player.team[player.activePokemonIndex].name;
-    player.activePokemonIndex = pokemonIndex;
+    const previousPokemonName =
+      requestingPlayer.team[requestingPlayer.activePokemonIndex].name;
+    requestingPlayer.activePokemonIndex = targetPokemonIndex;
 
-    const defenderIndex = playerIndex === 0 ? 1 : 0;
-    lobby.currentTurnIndex = defenderIndex;
+    const opponentIndex = requestingPlayerIndex === 0 ? 1 : 0;
+    lobby.currentTurnIndex = opponentIndex;
 
     lobby.updatedAt = new Date();
-    const updated = await this.lobbyRepository.update(lobby);
+    const updatedLobby = await this.lobbyRepository.update(lobby);
 
     this.logger.info('Player switched Pokemon', {
-      nickname: player.nickname,
-      from: previousPokemon,
+      nickname: requestingPlayer.nickname,
+      from: previousPokemonName,
       to: targetPokemon.name,
     });
 
-    return updated;
+    return updatedLobby;
   }
 }

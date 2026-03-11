@@ -1,4 +1,4 @@
-import type { LobbyStatus } from '#core/enums/index.js';
+import type { LobbyStatus } from '@core/enums/index';
 
 export interface PokemonStateDTO {
   id: number;

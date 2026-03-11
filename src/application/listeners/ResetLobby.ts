@@ -1,6 +1,6 @@
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { ILogger } from '#core/interfaces/index.js';
-import type { BattleFinishedEvent } from '#core/events/index.js';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { ILogger } from '@core/interfaces/index';
+import type { BattleFinishedEvent } from '@core/events/index';
 
 export class ResetLobby {
   constructor(

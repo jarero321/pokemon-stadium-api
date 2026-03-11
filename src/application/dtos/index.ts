@@ -1,2 +1,7 @@
-export type { LobbyDTO } from './LobbyDTO.js';
-export type { TurnResultDTO, BattleEndDTO } from './BattleDTO.js';
+export type { LobbyDTO } from './LobbyDTO';
+export type {
+  TurnResultDTO,
+  PokemonDefeatedDTO,
+  PokemonSwitchDTO,
+  BattleEndDTO,
+} from './BattleDTO';

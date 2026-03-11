@@ -1,23 +1,31 @@
-import type { ILogger } from '#core/interfaces/index.js';
-import type { ITurnLock } from '#core/interfaces/index.js';
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { IBattleRepository } from '#core/interfaces/index.js';
-import type { IEventBus } from '#core/interfaces/index.js';
-import type { Lobby, NewBattleTurn } from '#core/entities/index.js';
-import type { TurnResultDTO } from '#application/dtos/index.js';
-import { LobbyStatus } from '#core/enums/index.js';
+import type { ILogger } from '@core/interfaces/index';
+import type { ITurnLock } from '@core/interfaces/index';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { IBattleRepository } from '@core/interfaces/index';
+import type { IEventBus } from '@core/interfaces/index';
+import type { Lobby, NewBattleTurn } from '@core/entities/index';
+import type {
+  TurnResultDTO,
+  PokemonDefeatedDTO,
+  PokemonSwitchDTO,
+} from '@application/dtos/index';
+import { LobbyStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   NotYourTurnError,
   BattleNotActiveError,
-} from '#core/errors/index.js';
-import { getTypeMultiplier } from '#core/typeEffectiveness.js';
-import { createBattleFinishedEvent } from '#core/events/index.js';
+} from '@core/errors/index';
+import { getTypeMultiplier } from '@core/typeEffectiveness';
+import { createBattleFinishedEvent } from '@core/events/index';
+
+const MINIMUM_DAMAGE = 1;
 
 interface AttackResult {
   lobby: Lobby;
   turnResult: TurnResultDTO;
+  pokemonDefeated: PokemonDefeatedDTO | null;
+  pokemonSwitch: PokemonSwitchDTO | null;
   battleEnded: boolean;
   winner: string | null;
 }
@@ -31,29 +39,29 @@ export class ExecuteAttack {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(socketId: string): Promise<AttackResult> {
-    const initialLobby = await this.lobbyRepository.findActive();
-    if (!initialLobby) throw new LobbyNotFoundError();
-
-    const release = await this.turnLock.acquire(initialLobby._id!);
+  async execute(playerId: string): Promise<AttackResult> {
+    const release = await this.turnLock.acquire();
 
     try {
-      return await this.processAttack(socketId);
+      const lobby = await this.lobbyRepository.findActive();
+      if (!lobby) throw new LobbyNotFoundError();
+
+      return await this.processAttack(playerId, lobby);
     } finally {
       release();
     }
   }
 
-  private async processAttack(socketId: string): Promise<AttackResult> {
-    const lobby = await this.lobbyRepository.findActive();
-    if (!lobby) throw new LobbyNotFoundError();
-
+  private async processAttack(
+    playerId: string,
+    lobby: Lobby,
+  ): Promise<AttackResult> {
     if (lobby.status !== LobbyStatus.BATTLING) {
       throw new BattleNotActiveError();
     }
 
     const attackerIndex = lobby.players.findIndex(
-      (p) => p.socketId === socketId,
+      (player) => player.playerId === playerId,
     );
     if (attackerIndex === -1) throw new PlayerNotInLobbyError();
 
@@ -62,36 +70,56 @@ export class ExecuteAttack {
     }
 
     const defenderIndex = attackerIndex === 0 ? 1 : 0;
-    const attacker = lobby.players[attackerIndex];
-    const defender = lobby.players[defenderIndex];
+    const attackingPlayer = lobby.players[attackerIndex];
+    const defendingPlayer = lobby.players[defenderIndex];
 
-    const atkPokemon = attacker.team[attacker.activePokemonIndex];
-    const defPokemon = defender.team[defender.activePokemonIndex];
+    const attackingPokemon =
+      attackingPlayer.team[attackingPlayer.activePokemonIndex];
+    const defendingPokemon =
+      defendingPlayer.team[defendingPlayer.activePokemonIndex];
 
-    const typeMultiplier = getTypeMultiplier(atkPokemon.type, defPokemon.type);
+    const typeMultiplier = getTypeMultiplier(
+      attackingPokemon.type,
+      defendingPokemon.type,
+    );
 
     const rawDamage = Math.floor(
-      (atkPokemon.attack - defPokemon.defense) * typeMultiplier,
+      (attackingPokemon.attack - defendingPokemon.defense) * typeMultiplier,
     );
-    const damage = Math.max(1, rawDamage);
+    const effectiveDamage = Math.max(MINIMUM_DAMAGE, rawDamage);
 
-    defPokemon.hp = Math.max(0, defPokemon.hp - damage);
-    const defeated = defPokemon.hp === 0;
+    defendingPokemon.hp = Math.max(0, defendingPokemon.hp - effectiveDamage);
+    const isDefeated = defendingPokemon.hp === 0;
 
-    if (defeated) {
-      defPokemon.defeated = true;
+    if (isDefeated) {
+      defendingPokemon.defeated = true;
     }
 
-    let nextPokemon: string | null = null;
+    let nextPokemonName: string | null = null;
     let battleEnded = false;
     let winner: string | null = null;
+    let pokemonDefeatedNotification: PokemonDefeatedDTO | null = null;
+    let pokemonSwitchNotification: PokemonSwitchDTO | null = null;
 
-    if (defeated) {
-      const nextIndex = defender.team.findIndex((p) => !p.defeated);
+    if (isDefeated) {
+      const remainingAlivePokemon = defendingPlayer.team.filter(
+        (pokemon) => !pokemon.defeated,
+      ).length;
 
-      if (nextIndex === -1) {
+      pokemonDefeatedNotification = {
+        owner: defendingPlayer.nickname,
+        pokemon: defendingPokemon.name,
+        defeatedBy: attackingPokemon.name,
+        remainingTeam: remainingAlivePokemon,
+      };
+
+      const nextAliveIndex = defendingPlayer.team.findIndex(
+        (pokemon) => !pokemon.defeated,
+      );
+
+      if (nextAliveIndex === -1) {
         battleEnded = true;
-        winner = attacker.nickname;
+        winner = attackingPlayer.nickname;
         lobby.status = LobbyStatus.FINISHED;
         lobby.winner = winner;
 
@@ -101,7 +129,7 @@ export class ExecuteAttack {
           createBattleFinishedEvent(
             lobby.battleId!,
             winner,
-            defender.nickname,
+            defendingPlayer.nickname,
             crypto.randomUUID(),
           ),
         );
@@ -111,57 +139,71 @@ export class ExecuteAttack {
           battleId: lobby.battleId,
         });
       } else {
-        defender.activePokemonIndex = nextIndex;
-        nextPokemon = defender.team[nextIndex].name;
+        defendingPlayer.activePokemonIndex = nextAliveIndex;
+        const nextAlivePokemon = defendingPlayer.team[nextAliveIndex];
+        nextPokemonName = nextAlivePokemon.name;
 
-        this.logger.info('Pokemon switched', {
-          defender: defender.nickname,
-          defeated: defPokemon.name,
-          next: nextPokemon,
+        pokemonSwitchNotification = {
+          player: defendingPlayer.nickname,
+          previousPokemon: defendingPokemon.name,
+          newPokemon: nextAlivePokemon.name,
+          newPokemonHp: nextAlivePokemon.hp,
+          newPokemonMaxHp: nextAlivePokemon.maxHp,
+        };
+
+        this.logger.info('Pokemon auto-switched after defeat', {
+          defender: defendingPlayer.nickname,
+          defeated: defendingPokemon.name,
+          next: nextPokemonName,
         });
       }
     }
 
-    const turnData: NewBattleTurn = {
+    const turnRecord: NewBattleTurn = {
       attacker: {
-        nickname: attacker.nickname,
-        pokemon: atkPokemon.name,
-        attack: atkPokemon.attack,
+        nickname: attackingPlayer.nickname,
+        pokemon: attackingPokemon.name,
+        attack: attackingPokemon.attack,
       },
       defender: {
-        nickname: defender.nickname,
-        pokemon: defPokemon.name,
-        defense: defPokemon.defense,
-        remainingHp: defPokemon.hp,
-        maxHp: defPokemon.maxHp,
+        nickname: defendingPlayer.nickname,
+        pokemon: defendingPokemon.name,
+        defense: defendingPokemon.defense,
+        remainingHp: defendingPokemon.hp,
+        maxHp: defendingPokemon.maxHp,
       },
-      damage,
+      damage: effectiveDamage,
       typeMultiplier,
-      defeated,
-      nextPokemon,
+      defeated: isDefeated,
+      nextPokemon: nextPokemonName,
       timestamp: new Date(),
     };
 
-    const turn = await this.battleRepository.addTurn(lobby.battleId!, turnData);
+    const persistedTurn = await this.battleRepository.addTurn(
+      lobby.battleId!,
+      turnRecord,
+    );
 
     if (!battleEnded) {
       lobby.currentTurnIndex = defenderIndex;
     }
 
     lobby.updatedAt = new Date();
-    const updated = await this.lobbyRepository.update(lobby);
+    const updatedLobby = await this.lobbyRepository.update(lobby);
 
     this.logger.debug('Turn executed', {
-      attacker: atkPokemon.name,
-      defender: defPokemon.name,
-      damage,
+      attacker: attackingPokemon.name,
+      defender: defendingPokemon.name,
+      damage: effectiveDamage,
       typeMultiplier,
-      remainingHp: defPokemon.hp,
+      remainingHp: defendingPokemon.hp,
     });
 
     return {
-      lobby: updated,
-      turnResult: turn,
+      lobby: updatedLobby,
+      turnResult: persistedTurn,
+      pokemonDefeated: pokemonDefeatedNotification,
+      pokemonSwitch: pokemonSwitchNotification,
       battleEnded,
       winner,
     };

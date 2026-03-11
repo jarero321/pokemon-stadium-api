@@ -1,8 +1,8 @@
-import type { ILogger } from '#core/interfaces/index.js';
+import type { ILogger } from '@core/interfaces/index';
 import type {
   IPokemonApiService,
   PokemonCatalogItem,
-} from '#core/interfaces/index.js';
+} from '@core/interfaces/index';
 
 export class GetPokemonCatalog {
   constructor(

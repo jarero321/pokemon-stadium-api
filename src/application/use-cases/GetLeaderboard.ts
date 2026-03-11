@@ -1,6 +1,6 @@
-import type { IPlayerRepository } from '#core/interfaces/index.js';
-import type { ILogger } from '#core/interfaces/index.js';
-import type { PlayerStats } from '#core/entities/index.js';
+import type { IPlayerRepository } from '@core/interfaces/index';
+import type { ILogger } from '@core/interfaces/index';
+import type { PlayerStats } from '@core/entities/index';
 
 export class GetLeaderboard {
   constructor(

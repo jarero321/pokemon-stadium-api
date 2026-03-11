@@ -1,14 +1,14 @@
-import type { ILogger } from '#core/interfaces/index.js';
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { IBattleRepository } from '#core/interfaces/index.js';
-import type { Lobby } from '#core/entities/index.js';
-import { LobbyStatus, PlayerStatus } from '#core/enums/index.js';
+import type { ILogger } from '@core/interfaces/index';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { IBattleRepository } from '@core/interfaces/index';
+import type { Lobby } from '@core/entities/index';
+import { LobbyStatus, PlayerStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   LobbyNotInStateError,
   InvalidPlayerStatusError,
-} from '#core/errors/index.js';
+} from '@core/errors/index';
 
 export class PlayerReady {
   constructor(
@@ -18,7 +18,7 @@ export class PlayerReady {
   ) {}
 
   async execute(
-    socketId: string,
+    playerId: string,
   ): Promise<{ lobby: Lobby; battleStarted: boolean }> {
     const lobby = await this.lobbyRepository.findActive();
     if (!lobby) throw new LobbyNotFoundError();
@@ -27,31 +27,33 @@ export class PlayerReady {
       throw new LobbyNotInStateError(LobbyStatus.WAITING, lobby.status);
     }
 
-    const player = lobby.players.find((p) => p.socketId === socketId);
-    if (!player) throw new PlayerNotInLobbyError();
+    const requestingPlayer = lobby.players.find(
+      (player) => player.playerId === playerId,
+    );
+    if (!requestingPlayer) throw new PlayerNotInLobbyError();
 
-    if (player.status !== PlayerStatus.TEAM_ASSIGNED) {
+    if (requestingPlayer.status !== PlayerStatus.TEAM_ASSIGNED) {
       throw new InvalidPlayerStatusError(
         PlayerStatus.TEAM_ASSIGNED,
-        player.status,
+        requestingPlayer.status,
       );
     }
 
-    player.status = PlayerStatus.READY;
+    requestingPlayer.status = PlayerStatus.READY;
 
     this.logger.info('Player marked as ready', {
-      nickname: player.nickname,
+      nickname: requestingPlayer.nickname,
     });
 
-    const allReady =
+    const bothPlayersReady =
       lobby.players.length === 2 &&
-      lobby.players.every((p) => p.status === PlayerStatus.READY);
+      lobby.players.every((player) => player.status === PlayerStatus.READY);
 
-    if (allReady) {
-      const battle = await this.battleRepository.create({
-        players: lobby.players.map((p) => ({
-          nickname: p.nickname,
-          team: structuredClone(p.team),
+    if (bothPlayersReady) {
+      const createdBattle = await this.battleRepository.create({
+        players: lobby.players.map((player) => ({
+          nickname: player.nickname,
+          team: structuredClone(player.team),
         })),
         turns: [],
         winner: null,
@@ -60,26 +62,27 @@ export class PlayerReady {
         finishedAt: null,
       });
 
-      lobby.battleId = battle._id!;
+      lobby.battleId = createdBattle._id!;
       lobby.status = LobbyStatus.BATTLING;
 
-      lobby.players.forEach((p) => {
-        p.status = PlayerStatus.BATTLING;
+      lobby.players.forEach((player) => {
+        player.status = PlayerStatus.BATTLING;
       });
 
-      const p1Speed = lobby.players[0].team[0].speed;
-      const p2Speed = lobby.players[1].team[0].speed;
-      lobby.currentTurnIndex = p1Speed >= p2Speed ? 0 : 1;
+      const firstActivePokemonSpeed = lobby.players[0].team[0].speed;
+      const secondActivePokemonSpeed = lobby.players[1].team[0].speed;
+      lobby.currentTurnIndex =
+        firstActivePokemonSpeed >= secondActivePokemonSpeed ? 0 : 1;
 
       this.logger.info('Battle started', {
-        battleId: battle._id,
+        battleId: createdBattle._id,
         firstTurn: lobby.players[lobby.currentTurnIndex].nickname,
       });
     }
 
     lobby.updatedAt = new Date();
-    const updated = await this.lobbyRepository.update(lobby);
+    const updatedLobby = await this.lobbyRepository.update(lobby);
 
-    return { lobby: updated, battleStarted: allReady };
+    return { lobby: updatedLobby, battleStarted: bothPlayersReady };
   }
 }

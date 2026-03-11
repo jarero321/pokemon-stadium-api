@@ -1,14 +1,16 @@
-import type { ILogger } from '#core/interfaces/index.js';
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { IPokemonApiService } from '#core/interfaces/index.js';
-import type { Lobby } from '#core/entities/index.js';
-import type { Pokemon } from '#core/entities/index.js';
-import { PlayerStatus } from '#core/enums/index.js';
+import type { ILogger } from '@core/interfaces/index';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { IPokemonApiService } from '@core/interfaces/index';
+import type { Lobby } from '@core/entities/index';
+import type { Pokemon } from '@core/entities/index';
+import { PlayerStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   InvalidPlayerStatusError,
-} from '#core/errors/index.js';
+} from '@core/errors/index';
+
+const TEAM_SIZE = 3;
 
 export class AssignPokemon {
   constructor(
@@ -17,53 +19,69 @@ export class AssignPokemon {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(socketId: string): Promise<Lobby> {
+  async execute(playerId: string): Promise<Lobby> {
     const lobby = await this.lobbyRepository.findActive();
     if (!lobby) throw new LobbyNotFoundError();
 
-    const player = lobby.players.find((p) => p.socketId === socketId);
-    if (!player) throw new PlayerNotInLobbyError();
+    const requestingPlayer = lobby.players.find(
+      (player) => player.playerId === playerId,
+    );
+    if (!requestingPlayer) throw new PlayerNotInLobbyError();
 
-    if (player.status !== PlayerStatus.JOINED) {
-      throw new InvalidPlayerStatusError(PlayerStatus.JOINED, player.status);
+    if (requestingPlayer.status !== PlayerStatus.JOINED) {
+      throw new InvalidPlayerStatusError(
+        PlayerStatus.JOINED,
+        requestingPlayer.status,
+      );
     }
 
-    const catalog = await this.pokemonApi.getList();
+    const fullCatalog = await this.pokemonApi.getList();
 
-    const assignedIds = lobby.players.flatMap((p) => p.team.map((pk) => pk.id));
-    const available = catalog.filter((p) => !assignedIds.includes(p.id));
+    const alreadyAssignedIds = lobby.players.flatMap((player) =>
+      player.team.map((pokemon) => pokemon.id),
+    );
+    const availablePokemon = fullCatalog.filter(
+      (pokemon) => !alreadyAssignedIds.includes(pokemon.id),
+    );
 
-    const shuffled = available.sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 3);
+    const shuffledAvailablePokemon = availablePokemon.sort(
+      () => Math.random() - 0.5,
+    );
+    const randomlySelectedPokemon = shuffledAvailablePokemon.slice(
+      0,
+      TEAM_SIZE,
+    );
 
-    const details = await this.pokemonApi.getByIds(selected.map((s) => s.id));
+    const selectedPokemonDetails = await this.pokemonApi.getByIds(
+      randomlySelectedPokemon.map((pokemon) => pokemon.id),
+    );
 
-    player.team = details.map(
-      (d): Pokemon => ({
-        id: d.id,
-        name: d.name,
-        type: d.type,
-        hp: d.hp,
-        maxHp: d.hp,
-        attack: d.attack,
-        defense: d.defense,
-        speed: d.speed,
-        sprite: d.sprite,
+    requestingPlayer.team = selectedPokemonDetails.map(
+      (pokemonDetail): Pokemon => ({
+        id: pokemonDetail.id,
+        name: pokemonDetail.name,
+        type: pokemonDetail.type,
+        hp: pokemonDetail.hp,
+        maxHp: pokemonDetail.hp,
+        attack: pokemonDetail.attack,
+        defense: pokemonDetail.defense,
+        speed: pokemonDetail.speed,
+        sprite: pokemonDetail.sprite,
         defeated: false,
       }),
     );
 
-    player.activePokemonIndex = 0;
-    player.status = PlayerStatus.TEAM_ASSIGNED;
+    requestingPlayer.activePokemonIndex = 0;
+    requestingPlayer.status = PlayerStatus.TEAM_ASSIGNED;
     lobby.updatedAt = new Date();
 
-    const updated = await this.lobbyRepository.update(lobby);
+    const updatedLobby = await this.lobbyRepository.update(lobby);
 
     this.logger.info('Pokemon team assigned', {
-      nickname: player.nickname,
-      team: player.team.map((p) => p.name),
+      nickname: requestingPlayer.nickname,
+      team: requestingPlayer.team.map((pokemon) => pokemon.name),
     });
 
-    return updated;
+    return updatedLobby;
   }
 }

@@ -1,7 +1,7 @@
-import type { IBattleRepository } from '#core/interfaces/index.js';
-import type { IPlayerRepository } from '#core/interfaces/index.js';
-import type { ILogger } from '#core/interfaces/index.js';
-import type { Battle, PlayerStats } from '#core/entities/index.js';
+import type { IBattleRepository } from '@core/interfaces/index';
+import type { IPlayerRepository } from '@core/interfaces/index';
+import type { ILogger } from '@core/interfaces/index';
+import type { Battle, PlayerStats } from '@core/entities/index';
 
 interface PlayerHistoryResult {
   stats: PlayerStats;

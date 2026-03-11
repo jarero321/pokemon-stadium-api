@@ -1,12 +1,14 @@
-import type { ILogger } from '#core/interfaces/index.js';
-import type { ILobbyRepository } from '#core/interfaces/index.js';
-import type { Lobby } from '#core/entities/index.js';
-import { LobbyStatus, PlayerStatus } from '#core/enums/index.js';
+import type { ILogger } from '@core/interfaces/index';
+import type { ILobbyRepository } from '@core/interfaces/index';
+import type { Lobby } from '@core/entities/index';
+import { LobbyStatus, PlayerStatus } from '@core/enums/index';
 import {
   LobbyFullError,
   PlayerAlreadyInLobbyError,
   LobbyNotInStateError,
-} from '#core/errors/index.js';
+} from '@core/errors/index';
+
+const MAX_PLAYERS_PER_LOBBY = 2;
 
 export class JoinLobby {
   constructor(
@@ -14,15 +16,15 @@ export class JoinLobby {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(nickname: string, socketId: string): Promise<Lobby> {
+  async execute(nickname: string, playerId: string): Promise<Lobby> {
     this.logger.info('Player attempting to join lobby', {
       nickname,
     });
 
-    let lobby = await this.lobbyRepository.findActive();
+    let activeLobby = await this.lobbyRepository.findActive();
 
-    if (!lobby) {
-      lobby = await this.lobbyRepository.create({
+    if (!activeLobby) {
+      activeLobby = await this.lobbyRepository.create({
         status: LobbyStatus.WAITING,
         players: [],
         currentTurnIndex: null,
@@ -32,39 +34,41 @@ export class JoinLobby {
         updatedAt: new Date(),
       });
       this.logger.info('New lobby created', {
-        lobbyId: lobby._id,
+        lobbyId: activeLobby._id,
       });
     }
 
-    if (lobby.status !== LobbyStatus.WAITING) {
-      throw new LobbyNotInStateError(LobbyStatus.WAITING, lobby.status);
+    if (activeLobby.status !== LobbyStatus.WAITING) {
+      throw new LobbyNotInStateError(LobbyStatus.WAITING, activeLobby.status);
     }
 
-    if (lobby.players.length >= 2) {
+    if (activeLobby.players.length >= MAX_PLAYERS_PER_LOBBY) {
       throw new LobbyFullError();
     }
 
-    const alreadyIn = lobby.players.some((p) => p.nickname === nickname);
-    if (alreadyIn) {
+    const playerAlreadyInLobby = activeLobby.players.some(
+      (player) => player.nickname === nickname,
+    );
+    if (playerAlreadyInLobby) {
       throw new PlayerAlreadyInLobbyError();
     }
 
-    lobby.players.push({
+    activeLobby.players.push({
       nickname,
-      socketId,
+      playerId,
       status: PlayerStatus.JOINED,
       team: [],
       activePokemonIndex: 0,
     });
 
-    lobby.updatedAt = new Date();
-    const updated = await this.lobbyRepository.update(lobby);
+    activeLobby.updatedAt = new Date();
+    const updatedLobby = await this.lobbyRepository.update(activeLobby);
 
     this.logger.info('Player joined lobby', {
       nickname,
-      playersCount: updated.players.length,
+      playersCount: updatedLobby.players.length,
     });
 
-    return updated;
+    return updatedLobby;
   }
 }

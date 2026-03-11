@@ -19,6 +19,21 @@ export interface TurnResultDTO {
   timestamp: Date;
 }
 
+export interface PokemonDefeatedDTO {
+  owner: string;
+  pokemon: string;
+  defeatedBy: string;
+  remainingTeam: number;
+}
+
+export interface PokemonSwitchDTO {
+  player: string;
+  previousPokemon: string;
+  newPokemon: string;
+  newPokemonHp: number;
+  newPokemonMaxHp: number;
+}
+
 export interface BattleEndDTO {
   winner: string;
   loser: string;
