@@ -2,6 +2,7 @@ import type { ILogger } from '#core/interfaces/index.js';
 import type { ITurnLock } from '#core/interfaces/index.js';
 import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { IBattleRepository } from '#core/interfaces/index.js';
+import type { IEventBus } from '#core/interfaces/index.js';
 import type { Lobby, BattleTurn } from '#core/entities/index.js';
 import type { TurnResultDTO } from '#application/dtos/index.js';
 import { LobbyStatus } from '#core/enums/index.js';
@@ -12,6 +13,7 @@ import {
   BattleNotActiveError,
 } from '#core/errors/index.js';
 import { getTypeMultiplier } from '#core/typeEffectiveness.js';
+import { createBattleFinishedEvent } from '#core/events/index.js';
 
 interface AttackResult {
   lobby: Lobby;
@@ -25,6 +27,7 @@ export class ExecuteAttack {
     private readonly lobbyRepository: ILobbyRepository,
     private readonly battleRepository: IBattleRepository,
     private readonly turnLock: ITurnLock,
+    private readonly eventBus: IEventBus,
     private readonly logger: ILogger,
   ) {}
 
@@ -93,6 +96,15 @@ export class ExecuteAttack {
         lobby.winner = winner;
 
         await this.battleRepository.finish(lobby.battleId!, winner);
+
+        await this.eventBus.emit(
+          createBattleFinishedEvent(
+            lobby.battleId!,
+            winner,
+            defender.nickname,
+            crypto.randomUUID(),
+          ),
+        );
 
         this.logger.info('Battle finished', {
           winner,

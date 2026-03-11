@@ -7,6 +7,7 @@ import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
   LobbyNotInStateError,
+  TeamNotAssignedError,
 } from '#core/errors/index.js';
 
 export class PlayerReady {
@@ -28,6 +29,10 @@ export class PlayerReady {
 
     const player = lobby.players.find((p) => p.socketId === socketId);
     if (!player) throw new PlayerNotInLobbyError();
+
+    if (player.team.length === 0) {
+      throw new TeamNotAssignedError();
+    }
 
     player.ready = true;
 
@@ -57,7 +62,7 @@ export class PlayerReady {
       lobby.status = LobbyStatus.BATTLING;
 
       const p1Speed = lobby.players[0].team[0].speed;
-      const p2Speed = lobby.players[1].team[1].speed;
+      const p2Speed = lobby.players[1].team[0].speed;
       lobby.currentTurnIndex = p1Speed >= p2Speed ? 0 : 1;
 
       this.logger.info('Battle started', {

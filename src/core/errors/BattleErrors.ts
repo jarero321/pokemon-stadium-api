@@ -23,3 +23,18 @@ export class PlayerNotInLobbyError extends BusinessError {
     super('PLAYER_NOT_IN_LOBBY', 'Player is not in the lobby');
   }
 }
+
+export class TeamNotAssignedError extends BusinessError {
+  constructor() {
+    super(
+      'TEAM_NOT_ASSIGNED',
+      'Player must have a team assigned before being ready',
+    );
+  }
+}
+
+export class InvalidSwitchError extends BusinessError {
+  constructor(reason: string) {
+    super('INVALID_SWITCH', reason);
+  }
+}

@@ -10,4 +10,6 @@ export {
   PokemonAlreadyDefeatedError,
   BattleNotActiveError,
   PlayerNotInLobbyError,
+  TeamNotAssignedError,
+  InvalidSwitchError,
 } from './BattleErrors.js';
