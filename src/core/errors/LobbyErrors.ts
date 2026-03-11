@@ -12,12 +12,6 @@ export class LobbyNotFoundError extends BusinessError {
   }
 }
 
-export class PlayerAlreadyInLobbyError extends BusinessError {
-  constructor() {
-    super('PLAYER_ALREADY_IN_LOBBY', 'Player is already in the lobby');
-  }
-}
-
 export class LobbyNotInStateError extends BusinessError {
   constructor(expected: string, actual: string) {
     super(

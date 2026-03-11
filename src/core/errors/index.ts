@@ -2,15 +2,21 @@ export { BusinessError } from './BusinessError.js';
 export {
   LobbyFullError,
   LobbyNotFoundError,
-  PlayerAlreadyInLobbyError,
   LobbyNotInStateError,
 } from './LobbyErrors.js';
 export {
   NotYourTurnError,
-  PokemonAlreadyDefeatedError,
   BattleNotActiveError,
-  PlayerNotInLobbyError,
-  TeamNotAssignedError,
+  BattleNotFoundError,
   InvalidSwitchError,
-  InvalidPlayerStatusError,
 } from './BattleErrors.js';
+export {
+  PlayerNotInLobbyError,
+  PlayerAlreadyInLobbyError,
+  InvalidPlayerStatusError,
+  PlayerNotFoundError,
+} from './PlayerErrors.js';
+export {
+  PokemonAlreadyDefeatedError,
+  InsufficientPokemonError,
+} from './PokemonErrors.js';
