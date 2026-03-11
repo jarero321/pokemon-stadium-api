@@ -3,7 +3,7 @@ import type { ITurnLock } from '#core/interfaces/index.js';
 import type { ILobbyRepository } from '#core/interfaces/index.js';
 import type { IBattleRepository } from '#core/interfaces/index.js';
 import type { IEventBus } from '#core/interfaces/index.js';
-import type { Lobby, BattleTurn } from '#core/entities/index.js';
+import type { Lobby, NewBattleTurn } from '#core/entities/index.js';
 import type { TurnResultDTO } from '#application/dtos/index.js';
 import { LobbyStatus } from '#core/enums/index.js';
 import {
@@ -122,10 +122,7 @@ export class ExecuteAttack {
       }
     }
 
-    const turn: BattleTurn = {
-      turnNumber:
-        (await this.battleRepository.findById(lobby.battleId!))!.turns.length +
-        1,
+    const turnData: NewBattleTurn = {
       attacker: {
         nickname: attacker.nickname,
         pokemon: atkPokemon.name,
@@ -145,7 +142,7 @@ export class ExecuteAttack {
       timestamp: new Date(),
     };
 
-    await this.battleRepository.addTurn(lobby.battleId!, turn);
+    const turn = await this.battleRepository.addTurn(lobby.battleId!, turnData);
 
     if (!battleEnded) {
       lobby.currentTurnIndex = defenderIndex;

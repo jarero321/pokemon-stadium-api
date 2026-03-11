@@ -21,6 +21,8 @@ export interface BattleTurn {
   timestamp: Date;
 }
 
+export type NewBattleTurn = Omit<BattleTurn, 'turnNumber'>;
+
 export interface BattlePlayer {
   nickname: string;
   team: Pokemon[];
