@@ -24,6 +24,7 @@ export class PokemonApiService implements IPokemonApiService {
   ) {}
 
   async getList(): Promise<PokemonCatalogItem[]> {
+    this.logger.debug('Fetching pokemon catalog from PokeAPI');
     const response = await fetch(`${this.baseUrl}/pokemon?limit=151`);
     const data = (await response.json()) as PokeApiListResponse;
 
@@ -46,11 +47,8 @@ export class PokemonApiService implements IPokemonApiService {
   }
 
   async getByIds(ids: number[]): Promise<PokemonDetail[]> {
-    this.logger.debug('Fetching pokemon details', { ids });
-
-    const pokemonDetails = await Promise.all(ids.map((id) => this.getById(id)));
-
-    return pokemonDetails;
+    this.logger.debug('Fetching pokemon details from PokeAPI', { ids });
+    return Promise.all(ids.map((id) => this.getById(id)));
   }
 
   private mapToPokemonDetail(data: PokeApiPokemonResponse): PokemonDetail {

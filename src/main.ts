@@ -5,6 +5,7 @@ import { MongoLobbyRepository } from '@infrastructure/database/mongo/repositorie
 import { MongoBattleRepository } from '@infrastructure/database/mongo/repositories/MongoBattleRepository';
 import { MongoPlayerRepository } from '@infrastructure/database/mongo/repositories/MongoPlayerRepository';
 import { PokemonApiService } from '@infrastructure/external/PokemonApiService';
+import { CachedPokemonApiService } from '@infrastructure/external/CachedPokemonApiService';
 import { EventBus } from '@infrastructure/events/EventBus';
 import { InMemoryTurnLock } from '@infrastructure/locks/InMemoryTurnLock';
 import { JoinLobby } from '@application/use-cases/JoinLobby';
@@ -38,7 +39,11 @@ async function bootstrap() {
   const playerRepository = new MongoPlayerRepository();
 
   // ── External Services ─────────────────────────────────────
-  const pokemonApi = new PokemonApiService(env.POKEMON_API_BASE_URL, logger);
+  const externalPokemonApi = new PokemonApiService(
+    env.POKEMON_API_BASE_URL,
+    logger,
+  );
+  const pokemonApi = new CachedPokemonApiService(externalPokemonApi, logger);
 
   // ── Infrastructure ────────────────────────────────────────
   const eventBus = new EventBus(logger);
@@ -105,6 +110,17 @@ async function bootstrap() {
   // ── Start ─────────────────────────────────────────────────
   await fastify.listen({ port: env.PORT, host: env.HOST });
   logger.info(`Server listening on http://${env.HOST}:${env.PORT}`);
+
+  // ── Graceful Shutdown ───────────────────────────────────
+  const shutdown = async (signal: string) => {
+    logger.info(`${signal} received, shutting down gracefully...`);
+    await fastify.close();
+    logger.info('Server closed');
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 bootstrap().catch((error) => {
