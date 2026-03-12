@@ -12,6 +12,15 @@ import {
 
 const TEAM_SIZE = 3;
 
+function fisherYatesShuffle<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 export class AssignPokemon {
   constructor(
     private readonly lobbyRepository: ILobbyRepository,
@@ -44,9 +53,7 @@ export class AssignPokemon {
       (pokemon) => !alreadyAssignedIds.includes(pokemon.id),
     );
 
-    const shuffledAvailablePokemon = availablePokemon.sort(
-      () => Math.random() - 0.5,
-    );
+    const shuffledAvailablePokemon = fisherYatesShuffle(availablePokemon);
     const randomlySelectedPokemon = shuffledAvailablePokemon.slice(
       0,
       TEAM_SIZE,
