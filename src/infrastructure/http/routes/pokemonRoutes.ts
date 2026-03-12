@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import mongoose from 'mongoose';
 import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import type { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
@@ -109,7 +110,7 @@ export async function registerRoutes(
     },
   );
 
-  app.get<{ Params: { nickname: string } }>(
+  app.get<{ Params: { nickname: string }; Querystring: { limit?: string } }>(
     '/api/players/:nickname/history',
     {
       schema: {
@@ -121,6 +122,15 @@ export async function registerRoutes(
             nickname: { type: 'string', description: 'Player nickname' },
           },
           required: ['nickname'],
+        },
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'string',
+              description: 'Max battles to return (default 20)',
+            },
+          },
         },
         response: {
           200: apiResponseSchema({
@@ -144,7 +154,13 @@ export async function registerRoutes(
       },
     },
     async (request, reply) => {
-      const result = await getPlayerHistory.execute(request.params.nickname);
+      const limit = request.query.limit
+        ? parseInt(request.query.limit, 10)
+        : 20;
+      const result = await getPlayerHistory.execute(
+        request.params.nickname,
+        limit,
+      );
 
       if (!result) {
         return reply
@@ -173,13 +189,31 @@ export async function registerRoutes(
             type: 'object',
             properties: {
               status: { type: 'string' },
+              mongo: { type: 'string' },
             },
           }),
+          503: apiErrorSchema,
         },
       },
     },
-    async (request) => {
-      return ok({ status: 'healthy' }, request.traceId);
+    async (request, reply) => {
+      const mongoStatus =
+        mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+      const isHealthy = mongoStatus === 'connected';
+
+      if (!isHealthy) {
+        return reply
+          .code(503)
+          .send(
+            fail(
+              'SERVICE_DEGRADED',
+              `MongoDB is ${mongoStatus}`,
+              request.traceId,
+            ),
+          );
+      }
+
+      return ok({ status: 'healthy', mongo: mongoStatus }, request.traceId);
     },
   );
 }

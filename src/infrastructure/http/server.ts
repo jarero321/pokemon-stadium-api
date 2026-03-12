@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import fastifyCors from '@fastify/cors';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import type { ILogger } from '@core/interfaces/index';
@@ -20,6 +21,8 @@ export async function createHttpServer(dependencies: HttpServerDependencies) {
   const { logger, ...useCases } = dependencies;
 
   const app = Fastify({ logger: false });
+
+  await app.register(fastifyCors, { origin: '*' });
 
   await app.register(fastifySwagger, {
     openapi: {
