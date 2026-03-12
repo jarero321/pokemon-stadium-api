@@ -6,6 +6,7 @@ import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
 import { mapLobbyToDTO } from '../mapLobbyToDTO';
+import { switchPokemonSchema } from '../schemas';
 
 interface BattleHandlerDependencies {
   io: Server;
@@ -76,30 +77,35 @@ export function registerBattleHandler(
 
   socket.on(
     ClientEvent.SWITCH_POKEMON,
-    withErrorBoundary(
-      socket,
-      handlerLogger,
-      async (data: { targetPokemonIndex: number }) => {
-        if (!registry.isSocketRegistered(socket.id)) {
-          socket.emit(ServerEvent.ERROR, {
-            code: 'NOT_IN_LOBBY',
-            message: 'You must join the lobby first',
-          });
-          return;
-        }
+    withErrorBoundary(socket, handlerLogger, async (rawData: unknown) => {
+      const parsed = switchPokemonSchema.safeParse(rawData);
+      if (!parsed.success) {
+        socket.emit(ServerEvent.ERROR, {
+          code: 'INVALID_PAYLOAD',
+          message: parsed.error.issues[0].message,
+        });
+        return;
+      }
 
-        const lobby = await switchPokemon.execute(
-          socket.id,
-          data.targetPokemonIndex,
-        );
+      if (!registry.isSocketRegistered(socket.id)) {
+        socket.emit(ServerEvent.ERROR, {
+          code: 'NOT_IN_LOBBY',
+          message: 'You must join the lobby first',
+        });
+        return;
+      }
 
-        io.to(registry.lobbyRoom).emit(
-          ServerEvent.LOBBY_STATUS,
-          mapLobbyToDTO(lobby),
-        );
+      const lobby = await switchPokemon.execute(
+        socket.id,
+        parsed.data.targetPokemonIndex,
+      );
 
-        handlerLogger.info('Pokemon switched');
-      },
-    ),
+      io.to(registry.lobbyRoom).emit(
+        ServerEvent.LOBBY_STATUS,
+        mapLobbyToDTO(lobby),
+      );
+
+      handlerLogger.info('Pokemon switched');
+    }),
   );
 }
