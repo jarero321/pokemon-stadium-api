@@ -15,11 +15,14 @@ export class GetPlayerHistory {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(nickname: string): Promise<PlayerHistoryResult | null> {
+  async execute(
+    nickname: string,
+    limit: number = 20,
+  ): Promise<PlayerHistoryResult | null> {
     const stats = await this.playerRepository.findByNickname(nickname);
     if (!stats) return null;
 
-    const battles = await this.battleRepository.findByPlayer(nickname);
+    const battles = await this.battleRepository.findByPlayer(nickname, limit);
 
     this.logger.debug('Player history fetched', {
       nickname,

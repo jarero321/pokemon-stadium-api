@@ -38,9 +38,9 @@ export class FakeBattleRepository implements IBattleRepository {
     return structuredClone(battle);
   }
 
-  async findByPlayer(nickname: string): Promise<Battle[]> {
-    return this.battles.filter((b) =>
-      b.players.some((p) => p.nickname === nickname),
-    );
+  async findByPlayer(nickname: string, limit: number = 20): Promise<Battle[]> {
+    return this.battles
+      .filter((b) => b.players.some((p) => p.nickname === nickname))
+      .slice(0, limit);
   }
 }

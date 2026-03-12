@@ -5,5 +5,5 @@ export interface IBattleRepository {
   findById(id: string): Promise<Battle | null>;
   addTurn(battleId: string, turn: NewBattleTurn): Promise<BattleTurn>;
   finish(battleId: string, winner: string): Promise<Battle>;
-  findByPlayer(nickname: string): Promise<Battle[]>;
+  findByPlayer(nickname: string, limit?: number): Promise<Battle[]>;
 }
