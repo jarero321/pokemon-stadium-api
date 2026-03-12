@@ -12,6 +12,7 @@ import { registerLobbyHandler } from './handlers/lobbyHandler';
 import { registerBattleHandler } from './handlers/battleHandler';
 import { ServerEvent } from './SocketEvents';
 import { mapLobbyToDTO } from './mapLobbyToDTO';
+import { LobbyStatus } from '@core/enums/index';
 import type { ILobbyRepository } from '@core/interfaces/index';
 
 interface SocketServerDependencies {
@@ -83,9 +84,7 @@ export function createSocketServer(
             (player) => player.nickname !== disconnectedNickname,
           )?.nickname ?? null;
 
-        activeLobby.status = (
-          await import('@core/enums/index')
-        ).LobbyStatus.FINISHED;
+        activeLobby.status = LobbyStatus.FINISHED;
         activeLobby.updatedAt = new Date();
         await lobbyRepository.update(activeLobby);
 
