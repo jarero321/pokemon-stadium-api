@@ -2,6 +2,7 @@ import type { ILogger } from '@core/interfaces/index';
 import type { ITurnLock } from '@core/interfaces/index';
 import type { ILobbyRepository } from '@core/interfaces/index';
 import type { Lobby } from '@core/entities/index';
+import type { PokemonSwitchDTO } from '@application/dtos/BattleDTO';
 import { LobbyStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
@@ -18,7 +19,10 @@ export class SwitchPokemon {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(playerId: string, targetPokemonIndex: number): Promise<Lobby> {
+  async execute(
+    playerId: string,
+    targetPokemonIndex: number,
+  ): Promise<{ lobby: Lobby; switchInfo: PokemonSwitchDTO }> {
     const release = await this.turnLock.acquire();
 
     try {
@@ -35,7 +39,7 @@ export class SwitchPokemon {
     playerId: string,
     targetPokemonIndex: number,
     lobby: Lobby,
-  ): Promise<Lobby> {
+  ): Promise<{ lobby: Lobby; switchInfo: PokemonSwitchDTO }> {
     if (lobby.status !== LobbyStatus.BATTLING) {
       throw new BattleNotActiveError();
     }
@@ -85,6 +89,14 @@ export class SwitchPokemon {
       to: targetPokemon.name,
     });
 
-    return updatedLobby;
+    const switchInfo: PokemonSwitchDTO = {
+      player: requestingPlayer.nickname,
+      previousPokemon: previousPokemonName,
+      newPokemon: targetPokemon.name,
+      newPokemonHp: targetPokemon.hp,
+      newPokemonMaxHp: targetPokemon.maxHp,
+    };
+
+    return { lobby: updatedLobby, switchInfo };
   }
 }

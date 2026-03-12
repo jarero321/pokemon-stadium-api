@@ -399,10 +399,10 @@ describe('Battle Flow - Full game lifecycle', () => {
       const lobby = await setupBattle();
       const activePlayerId = lobby.players[lobby.currentTurnIndex!].playerId;
 
-      const result = await switchPokemon.execute(activePlayerId, 1);
+      const { lobby: result } = await switchPokemon.execute(activePlayerId, 1);
 
       const player = result.players.find(
-        (player) => player.playerId === activePlayerId,
+        (p) => p.playerId === activePlayerId,
       );
       expect(player!.activePokemonIndex).toBe(1);
     });
@@ -412,7 +412,7 @@ describe('Battle Flow - Full game lifecycle', () => {
       const firstTurnIndex = lobby.currentTurnIndex!;
       const activePlayerId = lobby.players[firstTurnIndex].playerId;
 
-      const result = await switchPokemon.execute(activePlayerId, 1);
+      const { lobby: result } = await switchPokemon.execute(activePlayerId, 1);
 
       const expectedNext = firstTurnIndex === 0 ? 1 : 0;
       expect(result.currentTurnIndex).toBe(expectedNext);

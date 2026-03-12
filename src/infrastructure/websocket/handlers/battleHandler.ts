@@ -95,9 +95,14 @@ export function registerBattleHandler(
         return;
       }
 
-      const lobby = await switchPokemon.execute(
+      const { lobby, switchInfo } = await switchPokemon.execute(
         socket.id,
         parsed.data.targetPokemonIndex,
+      );
+
+      io.to(registry.lobbyRoom).emit(
+        ServerEvent.POKEMON_SWITCH,
+        switchInfo,
       );
 
       io.to(registry.lobbyRoom).emit(
@@ -105,7 +110,11 @@ export function registerBattleHandler(
         mapLobbyToDTO(lobby),
       );
 
-      handlerLogger.info('Pokemon switched');
+      handlerLogger.info('Pokemon switched', {
+        player: switchInfo.player,
+        from: switchInfo.previousPokemon,
+        to: switchInfo.newPokemon,
+      });
     }),
   );
 }
