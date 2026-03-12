@@ -1,6 +1,6 @@
-<p align="center">
-  <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,5,30&height=200&section=header&text=Pok%C3%A9mon%20Stadium%20Lite&fontSize=42&fontColor=fff&animation=fadeIn&fontAlignY=35&desc=Real-time%20battle%20API%20%E2%80%93%20Node.js%20%C2%B7%20Socket.IO%20%C2%B7%20MongoDB&descSize=16&descAlignY=55" />
-</p>
+# Pokémon Stadium Lite
+
+> Real-time battle API — Node.js · Socket.IO · MongoDB
 
 <div align="center">
 
@@ -11,13 +11,11 @@
 ![MongoDB](https://img.shields.io/badge/mongodb-7-47A248?style=for-the-badge&logo=mongodb&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
-**Pokémon Stadium Lite** es una API backend en tiempo real para batallas Pokémon 1v1.
-Dos jugadores se conectan, reciben equipos aleatorios, y se enfrentan por turnos con efectividad de tipos.
-Todo persiste en MongoDB y el flujo de batalla corre sobre WebSockets.
+</div>
+
+API backend en tiempo real para batallas Pokémon 1v1. Dos jugadores se conectan, reciben equipos aleatorios, y se enfrentan por turnos con efectividad de tipos. Todo persiste en MongoDB y el flujo de batalla corre sobre WebSockets.
 
 [Inicio Rápido](#-inicio-rápido) · [Arquitectura](#-arquitectura) · [API REST](#-api-rest) · [WebSocket](#-eventos-websocket) · [ADR](#-architecture-decision-records) · [Docker](#-docker)
-
-</div>
 
 <br />
 
@@ -608,5 +606,3 @@ Register Player (8 tests)
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia MIT — ver [LICENSE](LICENSE) para más detalles.
-
-<img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,5,30&height=120&section=footer" />
