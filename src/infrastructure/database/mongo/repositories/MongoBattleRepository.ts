@@ -1,6 +1,6 @@
 import type { IBattleRepository } from '@core/interfaces/index';
 import type { Battle, BattleTurn, NewBattleTurn } from '@core/entities/index';
-import { BattleModel } from '../schemas/BattleSchema';
+import { BattleModel, BattleStatus } from '../schemas/BattleSchema';
 
 function toBattle(doc: Record<string, unknown>): Battle {
   const d = doc as {
@@ -51,7 +51,7 @@ export class MongoBattleRepository implements IBattleRepository {
   async finish(battleId: string, winner: string): Promise<Battle> {
     const doc = await BattleModel.findByIdAndUpdate(
       battleId,
-      { winner, status: 'finished', finishedAt: new Date() },
+      { winner, status: BattleStatus.FINISHED, finishedAt: new Date() },
       { new: true, lean: true },
     );
 

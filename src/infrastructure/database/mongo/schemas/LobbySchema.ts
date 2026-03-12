@@ -1,48 +1,43 @@
 import mongoose, { Schema } from 'mongoose';
 import { LobbyStatus } from '@core/enums/index';
 import { PlayerStatus } from '@core/enums/index';
-
-const pokemonSchema = new Schema(
-  {
-    id: { type: Number, required: true, min: 1 },
-    name: { type: String, required: true, trim: true },
-    type: {
-      type: [String],
-      required: true,
-      validate: (v: string[]) => v.length > 0,
-    },
-    hp: { type: Number, required: true, min: 0 },
-    maxHp: { type: Number, required: true, min: 1 },
-    attack: { type: Number, required: true, min: 0 },
-    defense: { type: Number, required: true, min: 0 },
-    speed: { type: Number, required: true, min: 0 },
-    sprite: { type: String, required: true },
-    defeated: { type: Boolean, default: false },
-  },
-  { _id: false },
-);
+import { pokemonSchema } from './subdocuments/pokemonSchema';
 
 const playerSchema = new Schema(
   {
     nickname: {
       type: String,
-      required: true,
+      required: [true, 'Player nickname is required'],
       trim: true,
-      minlength: 1,
-      maxlength: 20,
+      minlength: [1, 'Nickname must be at least 1 character'],
+      maxlength: [20, 'Nickname cannot exceed 20 characters'],
     },
-    playerId: { type: String, required: true },
+    playerId: {
+      type: String,
+      required: [true, 'Player ID is required'],
+    },
     status: {
       type: String,
-      enum: Object.values(PlayerStatus),
-      required: true,
+      required: [true, 'Player status is required'],
+      enum: {
+        values: Object.values(PlayerStatus),
+        message: '{VALUE} is not a valid player status',
+      },
     },
     team: {
       type: [pokemonSchema],
       default: [],
-      validate: (v: unknown[]) => v.length <= 3,
+      validate: {
+        validator: (v: unknown[]) => v.length <= 3,
+        message: 'A player cannot have more than 3 Pokémon in their team',
+      },
     },
-    activePokemonIndex: { type: Number, default: 0, min: 0, max: 2 },
+    activePokemonIndex: {
+      type: Number,
+      default: 0,
+      min: [0, 'Active Pokémon index cannot be negative'],
+      max: [2, 'Active Pokémon index cannot exceed 2'],
+    },
   },
   { _id: false },
 );
@@ -51,17 +46,28 @@ const lobbySchema = new Schema(
   {
     status: {
       type: String,
-      enum: Object.values(LobbyStatus),
-      required: true,
+      required: [true, 'Lobby status is required'],
       default: LobbyStatus.WAITING,
+      enum: {
+        values: Object.values(LobbyStatus),
+        message: '{VALUE} is not a valid lobby status',
+      },
       index: true,
     },
     players: {
       type: [playerSchema],
       default: [],
-      validate: (v: unknown[]) => v.length <= 2,
+      validate: {
+        validator: (v: unknown[]) => v.length <= 2,
+        message: 'A lobby cannot have more than 2 players',
+      },
     },
-    currentTurnIndex: { type: Number, default: null, min: 0, max: 1 },
+    currentTurnIndex: {
+      type: Number,
+      default: null,
+      min: [0, 'Turn index cannot be negative'],
+      max: [1, 'Turn index cannot exceed 1'],
+    },
     battleId: { type: String, default: null },
     winner: { type: String, default: null },
   },
