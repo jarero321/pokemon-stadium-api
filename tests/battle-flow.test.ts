@@ -149,13 +149,16 @@ describe('Battle Flow - Full game lifecycle', () => {
       expect(player!.status).toBe(PlayerStatus.READY);
     });
 
-    it('should start battle when both players are ready', async () => {
+    it('should transition through READY state and start battle when both players are ready', async () => {
       await joinLobby.execute('Ash', 'player-1');
       await joinLobby.execute('Gary', 'player-2');
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
       await playerReady.execute('player-1');
       const result = await playerReady.execute('player-2');
+
+      expect(result.readyLobby).not.toBeNull();
+      expect(result.readyLobby!.status).toBe(LobbyStatus.READY);
 
       expect(result.battleStarted).toBe(true);
       expect(result.lobby.status).toBe(LobbyStatus.BATTLING);

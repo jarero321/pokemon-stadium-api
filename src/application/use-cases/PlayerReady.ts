@@ -17,9 +17,11 @@ export class PlayerReady {
     private readonly logger: ILogger,
   ) {}
 
-  async execute(
-    playerId: string,
-  ): Promise<{ lobby: Lobby; battleStarted: boolean }> {
+  async execute(playerId: string): Promise<{
+    lobby: Lobby;
+    battleStarted: boolean;
+    readyLobby: Lobby | null;
+  }> {
     const lobby = await this.lobbyRepository.findActive();
     if (!lobby) throw new LobbyNotFoundError();
 
@@ -50,6 +52,12 @@ export class PlayerReady {
       lobby.players.every((player) => player.status === PlayerStatus.READY);
 
     if (bothPlayersReady) {
+      lobby.status = LobbyStatus.READY;
+      lobby.updatedAt = new Date();
+      const readyLobby = await this.lobbyRepository.update(lobby);
+
+      this.logger.info('Both players ready, lobby status set to ready');
+
       const createdBattle = await this.battleRepository.create({
         players: lobby.players.map((player) => ({
           nickname: player.nickname,
@@ -78,11 +86,20 @@ export class PlayerReady {
         battleId: createdBattle._id,
         firstTurn: lobby.players[lobby.currentTurnIndex].nickname,
       });
+
+      lobby.updatedAt = new Date();
+      const updatedLobby = await this.lobbyRepository.update(lobby);
+
+      return {
+        lobby: updatedLobby,
+        battleStarted: true,
+        readyLobby: readyLobby,
+      };
     }
 
     lobby.updatedAt = new Date();
     const updatedLobby = await this.lobbyRepository.update(lobby);
 
-    return { lobby: updatedLobby, battleStarted: bothPlayersReady };
+    return { lobby: updatedLobby, battleStarted: false, readyLobby: null };
   }
 }

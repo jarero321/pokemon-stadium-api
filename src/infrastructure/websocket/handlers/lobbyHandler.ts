@@ -94,7 +94,16 @@ export function registerLobbyHandler(
         return;
       }
 
-      const { lobby, battleStarted } = await playerReady.execute(socket.id);
+      const { lobby, battleStarted, readyLobby } = await playerReady.execute(
+        socket.id,
+      );
+
+      if (readyLobby) {
+        io.to(registry.lobbyRoom).emit(
+          ServerEvent.LOBBY_STATUS,
+          mapLobbyToDTO(readyLobby),
+        );
+      }
 
       io.to(registry.lobbyRoom).emit(
         ServerEvent.LOBBY_STATUS,
