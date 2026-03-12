@@ -1,6 +1,7 @@
 import type { IBattleRepository } from '@core/interfaces/index';
 import type { Battle, BattleTurn, NewBattleTurn } from '@core/entities/index';
-import { BattleModel, BattleStatus } from '../schemas/BattleSchema';
+import { BattleStatus } from '@core/enums/index';
+import { BattleModel } from '../schemas/BattleSchema';
 
 function toBattle(doc: Record<string, unknown>): Battle {
   const d = doc as {
@@ -59,9 +60,10 @@ export class MongoBattleRepository implements IBattleRepository {
     return toBattle(doc as unknown as Record<string, unknown>);
   }
 
-  async findByPlayer(nickname: string): Promise<Battle[]> {
+  async findByPlayer(nickname: string, limit: number = 20): Promise<Battle[]> {
     const docs = await BattleModel.find({ 'players.nickname': nickname })
       .sort({ startedAt: -1 })
+      .limit(limit)
       .lean();
 
     return docs.map((doc) =>

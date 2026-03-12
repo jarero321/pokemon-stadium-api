@@ -2,7 +2,7 @@ import type { ILogger } from '@core/interfaces/index';
 import type { ILobbyRepository } from '@core/interfaces/index';
 import type { IBattleRepository } from '@core/interfaces/index';
 import type { Lobby } from '@core/entities/index';
-import { LobbyStatus, PlayerStatus } from '@core/enums/index';
+import { BattleStatus, LobbyStatus, PlayerStatus } from '@core/enums/index';
 import {
   LobbyNotFoundError,
   PlayerNotInLobbyError,
@@ -57,7 +57,7 @@ export class PlayerReady {
         })),
         turns: [],
         winner: null,
-        status: LobbyStatus.BATTLING,
+        status: BattleStatus.IN_PROGRESS,
         startedAt: new Date(),
         finishedAt: null,
       });

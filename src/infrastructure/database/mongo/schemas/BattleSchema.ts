@@ -1,10 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
+import { BattleStatus } from '@core/enums/index';
 import { pokemonSchema } from './subdocuments/pokemonSchema';
-
-export enum BattleStatus {
-  IN_PROGRESS = 'in_progress',
-  FINISHED = 'finished',
-}
 
 const battleTurnSchema = new Schema(
   {
