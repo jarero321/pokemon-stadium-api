@@ -378,38 +378,38 @@ Conexión vía Socket.IO en `ws://localhost:8080`.
 
 ```mermaid
 sequenceDiagram
-    participant C as Cliente
-    participant S as Servidor
+    participant C as 🎮 Cliente
+    participant S as 🖥️ Servidor
 
-    rect rgb(40, 40, 60)
-    Note over C,S: Lobby
+    Note over C,S: 1. Lobby
+
     C->>S: join_lobby { nickname }
     S-->>C: lobby_status
+
     C->>S: assign_pokemon
-    S-->>C: lobby_status (3 Pokémon asignados)
+    S-->>C: lobby_status (3 Pokémon)
+
     C->>S: ready
     S-->>C: lobby_status (READY)
-    end
 
-    rect rgb(50, 30, 30)
-    Note over C,S: Batalla (turnos alternados)
+    Note over C,S: 2. Batalla
+
     S-->>C: lobby_status (BATTLING)
     S-->>C: battle_start
-    loop Hasta que un equipo completo caiga
+
+    loop Turnos alternados
         C->>S: attack
-        S-->>C: turn_result (daño + HP restante)
-        opt Pokémon derrotado (HP = 0)
+        S-->>C: turn_result
+        opt HP del defensor = 0
             S-->>C: pokemon_defeated
-            S-->>C: pokemon_switch (siguiente vivo)
+            S-->>C: pokemon_switch
         end
         S-->>C: lobby_status
     end
-    end
 
-    rect rgb(30, 50, 30)
-    Note over C,S: Fin
+    Note over C,S: 3. Resultado
+
     S-->>C: battle_end { winner, loser }
-    end
 ```
 
 ### Cliente → Servidor
