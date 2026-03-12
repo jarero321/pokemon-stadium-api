@@ -16,6 +16,7 @@ import { SwitchPokemon } from '@application/use-cases/SwitchPokemon';
 import { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
+import { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
 import { ResetLobby } from '@application/listeners/ResetLobby';
 import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import type { BattleFinishedEvent } from '@core/events/index';
@@ -74,6 +75,7 @@ async function bootstrap() {
     battleRepository,
     logger,
   );
+  const registerPlayer = new RegisterPlayer(playerRepository, logger);
 
   // ── Event Listeners ───────────────────────────────────────
   const resetLobby = new ResetLobby(lobbyRepository, logger);
@@ -91,6 +93,7 @@ async function bootstrap() {
     getPokemonCatalog,
     getLeaderboard,
     getPlayerHistory,
+    registerPlayer,
     logger,
   });
 

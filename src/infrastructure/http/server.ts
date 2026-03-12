@@ -6,6 +6,7 @@ import type { ILogger } from '@core/interfaces/index';
 import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import type { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
+import type { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
 import { registerRoutes } from './routes/pokemonRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 import { traceIdHook } from './middlewares/traceId';
@@ -14,6 +15,7 @@ interface HttpServerDependencies {
   getPokemonCatalog: GetPokemonCatalog;
   getLeaderboard: GetLeaderboard;
   getPlayerHistory: GetPlayerHistory;
+  registerPlayer: RegisterPlayer;
   logger: ILogger;
 }
 
