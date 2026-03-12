@@ -6,6 +6,9 @@ export interface PokemonStateDTO {
   type: string[];
   hp: number;
   maxHp: number;
+  attack: number;
+  defense: number;
+  speed: number;
   sprite: string;
   defeated: boolean;
 }
