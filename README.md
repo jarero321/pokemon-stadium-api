@@ -376,31 +376,40 @@ Conexión vía Socket.IO en `ws://localhost:8080`.
 
 ### Flujo de Batalla
 
-```
-  CLIENTE                               SERVIDOR
-    │                                      │
-    │──── join_lobby { nickname } ───────▶│  Crear/unir lobby
-    │◀─── lobby_status ──────────────────│
-    │                                      │
-    │──── assign_pokemon ────────────────▶│  3 Pokémon aleatorios
-    │◀─── lobby_status ──────────────────│
-    │                                      │
-    │──── ready ─────────────────────────▶│  Confirmar equipo
-    │◀─── lobby_status (READY) ──────────│
-    │◀─── lobby_status (BATTLING) ───────│  Ambos listos
-    │◀─── battle_start ──────────────────│
-    │                                      │
-    │──── attack ────────────────────────▶│  Ejecutar ataque
-    │◀─── turn_result ───────────────────│  Daño + HP restante
-    │◀─── pokemon_defeated ──────────────│  (si HP = 0)
-    │◀─── pokemon_switch ────────────────│  (siguiente Pokémon)
-    │◀─── lobby_status ──────────────────│
-    │                                      │
-    │──── switch_pokemon { index } ──────▶│  Cambio manual (gasta turno)
-    │◀─── lobby_status ──────────────────│
-    │                                      │
-    │◀─── battle_end ────────────────────│  Equipo completo derrotado
-    │                                      │
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant S as Servidor
+
+    rect rgb(40, 40, 60)
+    Note over C,S: Lobby
+    C->>S: join_lobby { nickname }
+    S-->>C: lobby_status
+    C->>S: assign_pokemon
+    S-->>C: lobby_status (3 Pokémon asignados)
+    C->>S: ready
+    S-->>C: lobby_status (READY)
+    end
+
+    rect rgb(50, 30, 30)
+    Note over C,S: Batalla (turnos alternados)
+    S-->>C: lobby_status (BATTLING)
+    S-->>C: battle_start
+    loop Hasta que un equipo completo caiga
+        C->>S: attack
+        S-->>C: turn_result (daño + HP restante)
+        opt Pokémon derrotado (HP = 0)
+            S-->>C: pokemon_defeated
+            S-->>C: pokemon_switch (siguiente vivo)
+        end
+        S-->>C: lobby_status
+    end
+    end
+
+    rect rgb(30, 50, 30)
+    Note over C,S: Fin
+    S-->>C: battle_end { winner, loser }
+    end
 ```
 
 ### Cliente → Servidor
