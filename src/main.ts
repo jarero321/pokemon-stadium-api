@@ -4,6 +4,7 @@ import { connectToMongo } from '@infrastructure/database/mongo/connection';
 import { MongoLobbyRepository } from '@infrastructure/database/mongo/repositories/MongoLobbyRepository';
 import { MongoBattleRepository } from '@infrastructure/database/mongo/repositories/MongoBattleRepository';
 import { MongoPlayerRepository } from '@infrastructure/database/mongo/repositories/MongoPlayerRepository';
+import { MongoOperationRunner } from '@infrastructure/database/mongo/MongoOperationRunner';
 import { PokemonApiService } from '@infrastructure/external/PokemonApiService';
 import { CachedPokemonApiService } from '@infrastructure/external/CachedPokemonApiService';
 import { EventBus } from '@infrastructure/events/EventBus';
@@ -22,6 +23,7 @@ import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import type { BattleFinishedEvent } from '@core/events/index';
 import { createHttpServer } from '@infrastructure/http/server';
 import { createSocketServer } from '@infrastructure/websocket/socketServer';
+import { JwtTokenService } from '@infrastructure/auth/JwtTokenService';
 
 async function bootstrap() {
   const logger = new PinoLogger();
@@ -47,8 +49,10 @@ async function bootstrap() {
   const pokemonApi = new CachedPokemonApiService(externalPokemonApi, logger);
 
   // ── Infrastructure ────────────────────────────────────────
+  const tokenService = new JwtTokenService(env.JWT_SECRET);
   const eventBus = new EventBus(logger);
   const turnLock = new InMemoryTurnLock();
+  const operationRunner = new MongoOperationRunner(logger);
 
   // ── Use Cases (WebSocket) ─────────────────────────────────
   const joinLobby = new JoinLobby(lobbyRepository, logger);
@@ -57,6 +61,7 @@ async function bootstrap() {
     lobbyRepository,
     battleRepository,
     logger,
+    operationRunner,
   );
   const executeAttack = new ExecuteAttack(
     lobbyRepository,
@@ -64,8 +69,14 @@ async function bootstrap() {
     turnLock,
     eventBus,
     logger,
+    operationRunner,
   );
-  const switchPokemon = new SwitchPokemon(lobbyRepository, turnLock, logger);
+  const switchPokemon = new SwitchPokemon(
+    lobbyRepository,
+    turnLock,
+    logger,
+    operationRunner,
+  );
 
   // ── Use Cases (REST) ──────────────────────────────────────
   const getPokemonCatalog = new GetPokemonCatalog(pokemonApi, logger);
@@ -75,11 +86,19 @@ async function bootstrap() {
     battleRepository,
     logger,
   );
-  const registerPlayer = new RegisterPlayer(playerRepository, logger);
+  const registerPlayer = new RegisterPlayer(
+    playerRepository,
+    tokenService,
+    logger,
+  );
 
   // ── Event Listeners ───────────────────────────────────────
   const resetLobby = new ResetLobby(lobbyRepository, logger);
-  const updateLeaderboard = new UpdateLeaderboard(playerRepository, logger);
+  const updateLeaderboard = new UpdateLeaderboard(
+    playerRepository,
+    logger,
+    operationRunner,
+  );
 
   eventBus.on<BattleFinishedEvent>('BattleFinished', (event) =>
     resetLobby.handle(event),
@@ -94,6 +113,7 @@ async function bootstrap() {
     getLeaderboard,
     getPlayerHistory,
     registerPlayer,
+    tokenService,
     logger,
   });
 
@@ -107,6 +127,7 @@ async function bootstrap() {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    tokenService,
     logger,
   });
 

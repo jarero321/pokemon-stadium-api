@@ -5,3 +5,5 @@ export { FakePokemonApiService } from './FakePokemonApiService';
 export { FakeEventBus } from './FakeEventBus';
 export { FakeTurnLock } from './FakeTurnLock';
 export { SilentLogger } from './SilentLogger';
+export { FakeTokenService } from './FakeTokenService';
+export { FakeOperationRunner } from './FakeOperationRunner';

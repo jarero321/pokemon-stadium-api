@@ -20,19 +20,27 @@ export class FakePlayerRepository implements IPlayerRepository {
   async addWin(nickname: string, battleId: string): Promise<void> {
     const player = this.players.get(nickname);
     if (!player) return;
-    player.wins++;
-    player.totalBattles++;
-    player.winRate = player.wins / player.totalBattles;
-    player.battleHistory.push(battleId);
+    const updated = {
+      ...player,
+      wins: player.wins + 1,
+      totalBattles: player.totalBattles + 1,
+      winRate: (player.wins + 1) / (player.totalBattles + 1),
+      battleHistory: [...player.battleHistory, battleId],
+    };
+    this.players.set(nickname, updated);
   }
 
   async addLoss(nickname: string, battleId: string): Promise<void> {
     const player = this.players.get(nickname);
     if (!player) return;
-    player.losses++;
-    player.totalBattles++;
-    player.winRate = player.wins / player.totalBattles;
-    player.battleHistory.push(battleId);
+    const updated = {
+      ...player,
+      losses: player.losses + 1,
+      totalBattles: player.totalBattles + 1,
+      winRate: player.wins / (player.totalBattles + 1),
+      battleHistory: [...player.battleHistory, battleId],
+    };
+    this.players.set(nickname, updated);
   }
 
   async getLeaderboard(limit: number = 10): Promise<PlayerStats[]> {

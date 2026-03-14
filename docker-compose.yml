@@ -6,7 +6,7 @@ services:
     environment:
       PORT: 8080
       HOST: 0.0.0.0
-      MONGODB_URI: mongodb://mongo:27017/pokemon-stadium
+      MONGODB_URI: mongodb://mongo:27017/pokemon-stadium?replicaSet=rs0
       POKEMON_API_BASE_URL: https://pokemon-api-92034153384.us-central1.run.app
       NODE_ENV: production
     depends_on:
@@ -16,12 +16,17 @@ services:
 
   mongo:
     image: mongo:7
+    command: ["--replSet", "rs0"]
     ports:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: mongosh --eval "db.runCommand('ping').ok" --quiet
+      test: >
+        mongosh --eval "
+          try { rs.status().ok }
+          catch(e) { rs.initiate({_id:'rs0', members:[{_id:0,host:'localhost:27017'}]}).ok }
+        " --quiet
       interval: 5s
       timeout: 5s
       retries: 5

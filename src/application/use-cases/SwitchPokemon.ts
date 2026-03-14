@@ -1,6 +1,7 @@
 import type { ILogger } from '@core/interfaces/index';
 import type { ITurnLock } from '@core/interfaces/index';
 import type { ILobbyRepository } from '@core/interfaces/index';
+import type { IOperationRunner } from '@core/interfaces/index';
 import type { Lobby } from '@core/entities/index';
 import type { PokemonSwitchDTO } from '@application/dtos/BattleDTO';
 import { LobbyStatus } from '@core/enums/index';
@@ -11,25 +12,34 @@ import {
   BattleNotActiveError,
   InvalidSwitchError,
 } from '@core/errors/index';
+import { guardNonEmptyString, guardNonNegativeInteger } from '@core/guards';
+import { updatePlayer, advanceTurn } from '@core/operations/lobby';
+import { switchActivePokemon } from '@core/operations/player';
 
 export class SwitchPokemon {
   constructor(
     private readonly lobbyRepository: ILobbyRepository,
     private readonly turnLock: ITurnLock,
     private readonly logger: ILogger,
+    private readonly runner: IOperationRunner,
   ) {}
 
   async execute(
     playerId: string,
     targetPokemonIndex: number,
+    requestId: string,
   ): Promise<{ lobby: Lobby; switchInfo: PokemonSwitchDTO }> {
+    guardNonEmptyString(playerId, 'playerId');
+    guardNonNegativeInteger(targetPokemonIndex, 'targetPokemonIndex');
     const release = await this.turnLock.acquire();
 
     try {
-      const lobby = await this.lobbyRepository.findActive();
-      if (!lobby) throw new LobbyNotFoundError();
+      return await this.runner.run(requestId, async (session) => {
+        const lobby = await this.lobbyRepository.findActive(session);
+        if (!lobby) throw new LobbyNotFoundError();
 
-      return await this.processSwitch(playerId, targetPokemonIndex, lobby);
+        return this.processSwitch(playerId, targetPokemonIndex, lobby, session);
+      });
     } finally {
       release();
     }
@@ -39,6 +49,7 @@ export class SwitchPokemon {
     playerId: string,
     targetPokemonIndex: number,
     lobby: Lobby,
+    session: unknown,
   ): Promise<{ lobby: Lobby; switchInfo: PokemonSwitchDTO }> {
     if (lobby.status !== LobbyStatus.BATTLING) {
       throw new BattleNotActiveError();
@@ -75,13 +86,16 @@ export class SwitchPokemon {
 
     const previousPokemonName =
       requestingPlayer.team[requestingPlayer.activePokemonIndex].name;
-    requestingPlayer.activePokemonIndex = targetPokemonIndex;
 
-    const opponentIndex = requestingPlayerIndex === 0 ? 1 : 0;
-    lobby.currentTurnIndex = opponentIndex;
+    const updatedRequestingPlayer = switchActivePokemon(
+      requestingPlayer,
+      targetPokemonIndex,
+    );
 
-    lobby.updatedAt = new Date();
-    const updatedLobby = await this.lobbyRepository.update(lobby);
+    let updatedLobby = updatePlayer(lobby, playerId, updatedRequestingPlayer);
+    updatedLobby = advanceTurn(updatedLobby);
+
+    const finalLobby = await this.lobbyRepository.update(updatedLobby, session);
 
     this.logger.info('Player switched Pokemon', {
       nickname: requestingPlayer.nickname,
@@ -97,6 +111,6 @@ export class SwitchPokemon {
       newPokemonMaxHp: targetPokemon.maxHp,
     };
 
-    return { lobby: updatedLobby, switchInfo };
+    return { lobby: finalLobby, switchInfo };
   }
 }

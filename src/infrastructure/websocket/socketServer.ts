@@ -13,7 +13,7 @@ import { registerBattleHandler } from './handlers/battleHandler';
 import { ServerEvent } from './SocketEvents';
 import { mapLobbyToDTO } from './mapLobbyToDTO';
 import { LobbyStatus } from '@core/enums/index';
-import type { ILobbyRepository } from '@core/interfaces/index';
+import type { ILobbyRepository, ITokenService } from '@core/interfaces/index';
 
 interface SocketServerDependencies {
   joinLobby: JoinLobby;
@@ -22,6 +22,7 @@ interface SocketServerDependencies {
   executeAttack: ExecuteAttack;
   switchPokemon: SwitchPokemon;
   lobbyRepository: ILobbyRepository;
+  tokenService: ITokenService;
   logger: ILogger;
 }
 
@@ -36,7 +37,23 @@ export function createSocketServer(
   });
 
   const registry = new PlayerConnectionRegistry();
-  const { logger, lobbyRepository, ...useCases } = dependencies;
+  const { logger, lobbyRepository, tokenService, ...useCases } = dependencies;
+
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+
+    if (!token) {
+      return next(new Error('AUTHENTICATION_ERROR'));
+    }
+
+    try {
+      const payload = tokenService.verify(token);
+      socket.data.nickname = payload.nickname;
+      next();
+    } catch {
+      next(new Error('AUTHENTICATION_ERROR'));
+    }
+  });
 
   io.on('connection', (socket) => {
     const traceId = randomUUID();
@@ -79,24 +96,28 @@ export function createSocketServer(
         const activeLobby = await lobbyRepository.findActive();
         if (!activeLobby) return;
 
-        activeLobby.winner =
+        const winner =
           activeLobby.players.find(
             (player) => player.nickname !== disconnectedNickname,
           )?.nickname ?? null;
 
-        activeLobby.status = LobbyStatus.FINISHED;
-        activeLobby.updatedAt = new Date();
-        await lobbyRepository.update(activeLobby);
+        const finishedLobby = {
+          ...activeLobby,
+          winner,
+          status: LobbyStatus.FINISHED,
+          updatedAt: new Date(),
+        };
+        await lobbyRepository.update(finishedLobby);
 
         io.to(registry.lobbyRoom).emit(ServerEvent.BATTLE_END, {
-          winner: activeLobby.winner,
+          winner,
           loser: disconnectedNickname,
           reason: 'opponent_disconnected',
         });
 
         io.to(registry.lobbyRoom).emit(
           ServerEvent.LOBBY_STATUS,
-          mapLobbyToDTO(activeLobby),
+          mapLobbyToDTO(finishedLobby),
         );
 
         registry.clear();

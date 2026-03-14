@@ -6,9 +6,9 @@ export class FakeBattleRepository implements IBattleRepository {
   private idCounter = 1;
 
   async create(battle: Battle): Promise<Battle> {
-    battle._id = `battle-${this.idCounter++}`;
-    this.battles.push(structuredClone(battle));
-    return structuredClone(battle);
+    const created = { ...battle, _id: `battle-${this.idCounter++}` };
+    this.battles.push(structuredClone(created));
+    return structuredClone(created);
   }
 
   async findById(id: string): Promise<Battle | null> {
@@ -24,7 +24,7 @@ export class FakeBattleRepository implements IBattleRepository {
       turnNumber: battle.turns.length + 1,
     };
 
-    battle.turns.push(fullTurn);
+    (battle.turns as BattleTurn[]).push(fullTurn);
     return structuredClone(fullTurn);
   }
 
@@ -32,10 +32,15 @@ export class FakeBattleRepository implements IBattleRepository {
     const battle = this.battles.find((b) => b._id === battleId);
     if (!battle) throw new Error(`Battle ${battleId} not found`);
 
-    battle.winner = winner;
-    battle.status = 'finished';
-    battle.finishedAt = new Date();
-    return structuredClone(battle);
+    const finished = {
+      ...battle,
+      winner,
+      status: 'finished',
+      finishedAt: new Date(),
+    };
+    const index = this.battles.indexOf(battle);
+    this.battles[index] = finished;
+    return structuredClone(finished);
   }
 
   async findByPlayer(nickname: string, limit: number = 20): Promise<Battle[]> {

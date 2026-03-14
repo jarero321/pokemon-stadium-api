@@ -18,6 +18,7 @@ import {
   FakeEventBus,
   FakeTurnLock,
   SilentLogger,
+  FakeOperationRunner,
 } from './fakes/index';
 
 describe('Battle Flow - Full game lifecycle', () => {
@@ -27,6 +28,7 @@ describe('Battle Flow - Full game lifecycle', () => {
   let eventBus: FakeEventBus;
   let turnLock: FakeTurnLock;
   let logger: SilentLogger;
+  let runner: FakeOperationRunner;
 
   let joinLobby: JoinLobby;
   let assignPokemon: AssignPokemon;
@@ -41,18 +43,20 @@ describe('Battle Flow - Full game lifecycle', () => {
     eventBus = new FakeEventBus();
     turnLock = new FakeTurnLock();
     logger = new SilentLogger();
+    runner = new FakeOperationRunner();
 
     joinLobby = new JoinLobby(lobbyRepo, logger);
     assignPokemon = new AssignPokemon(lobbyRepo, pokemonApi, logger);
-    playerReady = new PlayerReady(lobbyRepo, battleRepo, logger);
+    playerReady = new PlayerReady(lobbyRepo, battleRepo, logger, runner);
     executeAttack = new ExecuteAttack(
       lobbyRepo,
       battleRepo,
       turnLock,
       eventBus,
       logger,
+      runner,
     );
-    switchPokemon = new SwitchPokemon(lobbyRepo, turnLock, logger);
+    switchPokemon = new SwitchPokemon(lobbyRepo, turnLock, logger, runner);
   });
 
   // ─── JOIN LOBBY ───────────────────────────────────────────────────
@@ -140,7 +144,7 @@ describe('Battle Flow - Full game lifecycle', () => {
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
 
-      const result = await playerReady.execute('player-1');
+      const result = await playerReady.execute('player-1', crypto.randomUUID());
 
       expect(result.battleStarted).toBe(false);
       const player = result.lobby.players.find(
@@ -154,8 +158,8 @@ describe('Battle Flow - Full game lifecycle', () => {
       await joinLobby.execute('Gary', 'player-2');
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1');
-      const result = await playerReady.execute('player-2');
+      await playerReady.execute('player-1', crypto.randomUUID());
+      const result = await playerReady.execute('player-2', crypto.randomUUID());
 
       expect(result.readyLobby).not.toBeNull();
       expect(result.readyLobby!.status).toBe(LobbyStatus.READY);
@@ -175,8 +179,8 @@ describe('Battle Flow - Full game lifecycle', () => {
       await joinLobby.execute('Gary', 'player-2');
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1');
-      const result = await playerReady.execute('player-2');
+      await playerReady.execute('player-1', crypto.randomUUID());
+      const result = await playerReady.execute('player-2', crypto.randomUUID());
 
       const firstPlayerSpeed = result.lobby.players[0].team[0].speed;
       const secondPlayerSpeed = result.lobby.players[1].team[0].speed;
@@ -194,13 +198,16 @@ describe('Battle Flow - Full game lifecycle', () => {
       await joinLobby.execute('Gary', 'player-2');
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1');
-      const { lobby } = await playerReady.execute('player-2');
+      await playerReady.execute('player-1', crypto.randomUUID());
+      const { lobby } = await playerReady.execute(
+        'player-2',
+        crypto.randomUUID(),
+      );
       return lobby;
     }
 
     function getActivePlayerId(lobby: {
-      players: { playerId: string }[];
+      readonly players: readonly { playerId: string }[];
       currentTurnIndex: number | null;
     }) {
       return lobby.players[lobby.currentTurnIndex!].playerId;
@@ -210,7 +217,10 @@ describe('Battle Flow - Full game lifecycle', () => {
       const lobby = await setupBattle();
       const attackerId = getActivePlayerId(lobby);
 
-      const result = await executeAttack.execute(attackerId);
+      const result = await executeAttack.execute(
+        attackerId,
+        crypto.randomUUID(),
+      );
 
       expect(result.turnResult.turnNumber).toBe(1);
       expect(result.turnResult.damage).toBeGreaterThanOrEqual(1);
@@ -225,7 +235,10 @@ describe('Battle Flow - Full game lifecycle', () => {
       const firstTurnIndex = lobby.currentTurnIndex!;
       const attackerId = lobby.players[firstTurnIndex].playerId;
 
-      const result = await executeAttack.execute(attackerId);
+      const result = await executeAttack.execute(
+        attackerId,
+        crypto.randomUUID(),
+      );
 
       const expectedNext = firstTurnIndex === 0 ? 1 : 0;
       expect(result.lobby.currentTurnIndex).toBe(expectedNext);
@@ -236,16 +249,19 @@ describe('Battle Flow - Full game lifecycle', () => {
       const defenderIndex = lobby.currentTurnIndex === 0 ? 1 : 0;
       const defenderId = lobby.players[defenderIndex].playerId;
 
-      await expect(executeAttack.execute(defenderId)).rejects.toThrowError(
-        NotYourTurnError,
-      );
+      await expect(
+        executeAttack.execute(defenderId, crypto.randomUUID()),
+      ).rejects.toThrowError(NotYourTurnError);
     });
 
     it('should apply minimum damage of 1', async () => {
       const lobby = await setupBattle();
       const attackerId = getActivePlayerId(lobby);
 
-      const result = await executeAttack.execute(attackerId);
+      const result = await executeAttack.execute(
+        attackerId,
+        crypto.randomUUID(),
+      );
       expect(result.turnResult.damage).toBeGreaterThanOrEqual(1);
     });
 
@@ -258,7 +274,10 @@ describe('Battle Flow - Full game lifecycle', () => {
       for (let i = 0; i < 200 && !defeated; i++) {
         const currentLobby = await lobbyRepo.findActive();
         const attackerId = getActivePlayerId(currentLobby!);
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
 
         if (result.pokemonDefeated) {
           defeated = true;
@@ -287,7 +306,10 @@ describe('Battle Flow - Full game lifecycle', () => {
           break;
 
         const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
 
         if (result.pokemonSwitch) {
           switchDTO = result.pokemonSwitch;
@@ -316,7 +338,10 @@ describe('Battle Flow - Full game lifecycle', () => {
           break;
 
         const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
 
         if (result.battleEnded) {
           battleEnded = true;
@@ -339,7 +364,10 @@ describe('Battle Flow - Full game lifecycle', () => {
           break;
 
         const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
         if (result.battleEnded) break;
       }
 
@@ -356,7 +384,7 @@ describe('Battle Flow - Full game lifecycle', () => {
           break;
 
         const attackerId = getActivePlayerId(currentLobby);
-        await executeAttack.execute(attackerId);
+        await executeAttack.execute(attackerId, crypto.randomUUID());
       }
 
       const activeLobby = await lobbyRepo.findActive();
@@ -372,7 +400,10 @@ describe('Battle Flow - Full game lifecycle', () => {
           break;
 
         const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
 
         expect(result.turnResult.defender.remainingHp).toBeGreaterThanOrEqual(
           0,
@@ -390,8 +421,11 @@ describe('Battle Flow - Full game lifecycle', () => {
       await joinLobby.execute('Gary', 'player-2');
       await assignPokemon.execute('player-1');
       await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1');
-      const { lobby } = await playerReady.execute('player-2');
+      await playerReady.execute('player-1', crypto.randomUUID());
+      const { lobby } = await playerReady.execute(
+        'player-2',
+        crypto.randomUUID(),
+      );
       return lobby;
     }
 
@@ -399,11 +433,13 @@ describe('Battle Flow - Full game lifecycle', () => {
       const lobby = await setupBattle();
       const activePlayerId = lobby.players[lobby.currentTurnIndex!].playerId;
 
-      const { lobby: result } = await switchPokemon.execute(activePlayerId, 1);
-
-      const player = result.players.find(
-        (p) => p.playerId === activePlayerId,
+      const { lobby: result } = await switchPokemon.execute(
+        activePlayerId,
+        1,
+        crypto.randomUUID(),
       );
+
+      const player = result.players.find((p) => p.playerId === activePlayerId);
       expect(player!.activePokemonIndex).toBe(1);
     });
 
@@ -412,7 +448,11 @@ describe('Battle Flow - Full game lifecycle', () => {
       const firstTurnIndex = lobby.currentTurnIndex!;
       const activePlayerId = lobby.players[firstTurnIndex].playerId;
 
-      const { lobby: result } = await switchPokemon.execute(activePlayerId, 1);
+      const { lobby: result } = await switchPokemon.execute(
+        activePlayerId,
+        1,
+        crypto.randomUUID(),
+      );
 
       const expectedNext = firstTurnIndex === 0 ? 1 : 0;
       expect(result.currentTurnIndex).toBe(expectedNext);
@@ -423,7 +463,7 @@ describe('Battle Flow - Full game lifecycle', () => {
       const activePlayerId = lobby.players[lobby.currentTurnIndex!].playerId;
 
       await expect(
-        switchPokemon.execute(activePlayerId, 0),
+        switchPokemon.execute(activePlayerId, 0, crypto.randomUUID()),
       ).rejects.toThrowError(InvalidSwitchError);
     });
 
@@ -432,9 +472,9 @@ describe('Battle Flow - Full game lifecycle', () => {
       const defenderIndex = lobby.currentTurnIndex === 0 ? 1 : 0;
       const defenderId = lobby.players[defenderIndex].playerId;
 
-      await expect(switchPokemon.execute(defenderId, 1)).rejects.toThrowError(
-        NotYourTurnError,
-      );
+      await expect(
+        switchPokemon.execute(defenderId, 1, crypto.randomUUID()),
+      ).rejects.toThrowError(NotYourTurnError);
     });
 
     it('should reject switching to invalid index', async () => {
@@ -442,7 +482,7 @@ describe('Battle Flow - Full game lifecycle', () => {
       const activePlayerId = lobby.players[lobby.currentTurnIndex!].playerId;
 
       await expect(
-        switchPokemon.execute(activePlayerId, 99),
+        switchPokemon.execute(activePlayerId, 99, crypto.randomUUID()),
       ).rejects.toThrowError(InvalidSwitchError);
     });
   });
@@ -463,8 +503,11 @@ describe('Battle Flow - Full game lifecycle', () => {
       await assignPokemon.execute('player-2');
 
       // 3. Both players ready → battle starts
-      await playerReady.execute('player-1');
-      const readyResult = await playerReady.execute('player-2');
+      await playerReady.execute('player-1', crypto.randomUUID());
+      const readyResult = await playerReady.execute(
+        'player-2',
+        crypto.randomUUID(),
+      );
       expect(readyResult.battleStarted).toBe(true);
 
       // 4. Battle until winner
@@ -480,7 +523,10 @@ describe('Battle Flow - Full game lifecycle', () => {
 
         const attackerId =
           currentLobby.players[currentLobby.currentTurnIndex!].playerId;
-        const result = await executeAttack.execute(attackerId);
+        const result = await executeAttack.execute(
+          attackerId,
+          crypto.randomUUID(),
+        );
         totalTurns++;
 
         if (result.pokemonDefeated) {

@@ -6,7 +6,7 @@ import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
 import { mapLobbyToDTO } from '../mapLobbyToDTO';
-import { switchPokemonSchema } from '../schemas';
+import { attackSchema, switchPokemonSchema } from '../schemas';
 
 interface BattleHandlerDependencies {
   io: Server;
@@ -26,7 +26,16 @@ export function registerBattleHandler(
 
   socket.on(
     ClientEvent.ATTACK,
-    withErrorBoundary(socket, handlerLogger, async () => {
+    withErrorBoundary(socket, handlerLogger, async (rawData: unknown) => {
+      const parsed = attackSchema.safeParse(rawData);
+      if (!parsed.success) {
+        socket.emit(ServerEvent.ERROR, {
+          code: 'INVALID_PAYLOAD',
+          message: parsed.error.issues[0].message,
+        });
+        return;
+      }
+
       if (!registry.isSocketRegistered(socket.id)) {
         socket.emit(ServerEvent.ERROR, {
           code: 'NOT_IN_LOBBY',
@@ -35,7 +44,10 @@ export function registerBattleHandler(
         return;
       }
 
-      const result = await executeAttack.execute(socket.id);
+      const result = await executeAttack.execute(
+        socket.id,
+        parsed.data.requestId,
+      );
 
       io.to(registry.lobbyRoom).emit(
         ServerEvent.TURN_RESULT,
@@ -98,12 +110,10 @@ export function registerBattleHandler(
       const { lobby, switchInfo } = await switchPokemon.execute(
         socket.id,
         parsed.data.targetPokemonIndex,
+        parsed.data.requestId,
       );
 
-      io.to(registry.lobbyRoom).emit(
-        ServerEvent.POKEMON_SWITCH,
-        switchInfo,
-      );
+      io.to(registry.lobbyRoom).emit(ServerEvent.POKEMON_SWITCH, switchInfo);
 
       io.to(registry.lobbyRoom).emit(
         ServerEvent.LOBBY_STATUS,

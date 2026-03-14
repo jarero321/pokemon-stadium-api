@@ -1,6 +1,12 @@
+import type { ClientSession } from 'mongoose';
 import type { IPlayerRepository } from '@core/interfaces/index';
+import type { TransactionSession } from '@core/interfaces/index';
 import type { PlayerStats } from '@core/entities/index';
 import { PlayerModel } from '../schemas/PlayerSchema';
+
+function toSession(session?: TransactionSession): ClientSession | null {
+  return (session as ClientSession) ?? null;
+}
 
 function toPlayerStats(doc: {
   _id: { toString(): string };
@@ -40,32 +46,40 @@ export class MongoPlayerRepository implements IPlayerRepository {
     return toPlayerStats(doc);
   }
 
-  async addWin(nickname: string, battleId: string): Promise<void> {
+  async addWin(
+    nickname: string,
+    battleId: string,
+    session?: TransactionSession,
+  ): Promise<void> {
     const doc = await PlayerModel.findOneAndUpdate(
       { nickname },
       {
         $inc: { wins: 1, totalBattles: 1 },
         $push: { battleHistory: battleId },
       },
-      { upsert: true, new: true },
+      { upsert: true, new: true, session: toSession(session) },
     );
 
     doc.winRate = doc.totalBattles > 0 ? doc.wins / doc.totalBattles : 0;
-    await doc.save();
+    await doc.save({ session: toSession(session) });
   }
 
-  async addLoss(nickname: string, battleId: string): Promise<void> {
+  async addLoss(
+    nickname: string,
+    battleId: string,
+    session?: TransactionSession,
+  ): Promise<void> {
     const doc = await PlayerModel.findOneAndUpdate(
       { nickname },
       {
         $inc: { losses: 1, totalBattles: 1 },
         $push: { battleHistory: battleId },
       },
-      { upsert: true, new: true },
+      { upsert: true, new: true, session: toSession(session) },
     );
 
     doc.winRate = doc.totalBattles > 0 ? doc.wins / doc.totalBattles : 0;
-    await doc.save();
+    await doc.save({ session: toSession(session) });
   }
 
   async getLeaderboard(limit: number = 10): Promise<PlayerStats[]> {

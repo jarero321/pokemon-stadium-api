@@ -9,3 +9,5 @@ export type {
   PokemonCatalogItem,
   PokemonDetail,
 } from './IPokemonApiService';
+export type { ITokenService, TokenPayload } from './ITokenService';
+export type { IOperationRunner, TransactionSession } from './IOperationRunner';
