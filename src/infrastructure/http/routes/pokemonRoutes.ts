@@ -4,6 +4,8 @@ import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import type { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import type { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
+import type { ITokenService } from '@core/interfaces/index';
+import { createAuthHook } from '../middlewares/authHook';
 import { ok, fail } from '../ApiResponse';
 
 interface RouteDependencies {
@@ -11,6 +13,7 @@ interface RouteDependencies {
   getLeaderboard: GetLeaderboard;
   getPlayerHistory: GetPlayerHistory;
   registerPlayer: RegisterPlayer;
+  tokenService: ITokenService;
 }
 
 const apiResponseSchema = (dataSchema: Record<string, unknown>) => ({
@@ -50,11 +53,20 @@ export async function registerRoutes(
     getLeaderboard,
     getPlayerHistory,
     registerPlayer,
+    tokenService,
   } = dependencies;
+
+  const authHook = createAuthHook(tokenService);
 
   app.post<{ Body: { nickname: string } }>(
     '/api/players/register',
     {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
       schema: {
         tags: ['Players'],
         summary: 'Register or retrieve a player by nickname',
@@ -85,6 +97,7 @@ export async function registerRoutes(
                 },
               },
               isNewPlayer: { type: 'boolean' },
+              token: { type: 'string' },
             },
           }),
           400: apiErrorSchema,
@@ -165,6 +178,7 @@ export async function registerRoutes(
   app.get<{ Params: { nickname: string }; Querystring: { limit?: string } }>(
     '/api/players/:nickname/history',
     {
+      onRequest: authHook,
       schema: {
         tags: ['Players'],
         summary: 'Get battle history and stats for a player',
@@ -201,6 +215,7 @@ export async function registerRoutes(
               battles: { type: 'array', items: { type: 'object' } },
             },
           }),
+          401: apiErrorSchema,
           404: apiErrorSchema,
         },
       },
@@ -233,6 +248,9 @@ export async function registerRoutes(
   app.get(
     '/api/health',
     {
+      config: {
+        rateLimit: false,
+      },
       schema: {
         tags: ['System'],
         summary: 'Health check',

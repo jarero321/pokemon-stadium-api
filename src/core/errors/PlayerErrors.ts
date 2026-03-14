@@ -8,7 +8,7 @@ export class PlayerNotInLobbyError extends BusinessError {
 
 export class PlayerAlreadyInLobbyError extends BusinessError {
   constructor() {
-    super('PLAYER_ALREADY_IN_LOBBY', 'Player is already in the lobby');
+    super('PLAYER_ALREADY_IN_LOBBY', 'Player is already in the lobby', 409);
   }
 }
 

@@ -1,4 +1,4 @@
-import type { ILogger } from '@core/interfaces/index';
+import type { ILogger, ITokenService } from '@core/interfaces/index';
 import type { IPlayerRepository } from '@core/interfaces/index';
 import type { PlayerStats } from '@core/entities/index';
 import { BusinessError } from '@core/errors/index';
@@ -16,12 +16,13 @@ export class InvalidNicknameError extends BusinessError {
 export class RegisterPlayer {
   constructor(
     private readonly playerRepository: IPlayerRepository,
+    private readonly tokenService: ITokenService,
     private readonly logger: ILogger,
   ) {}
 
   async execute(
     nickname: string,
-  ): Promise<{ player: PlayerStats; isNewPlayer: boolean }> {
+  ): Promise<{ player: PlayerStats; isNewPlayer: boolean; token: string }> {
     const trimmed = nickname.trim();
 
     if (trimmed.length < NICKNAME_MIN_LENGTH) {
@@ -46,7 +47,8 @@ export class RegisterPlayer {
         totalBattles: existing.totalBattles,
       });
 
-      return { player: existing, isNewPlayer: false };
+      const token = this.tokenService.sign({ nickname: trimmed });
+      return { player: existing, isNewPlayer: false, token };
     }
 
     const newPlayer = await this.playerRepository.upsert({
@@ -60,6 +62,7 @@ export class RegisterPlayer {
 
     this.logger.info('New player registered', { nickname: trimmed });
 
-    return { player: newPlayer, isNewPlayer: true };
+    const token = this.tokenService.sign({ nickname: trimmed });
+    return { player: newPlayer, isNewPlayer: true, token };
   }
 }

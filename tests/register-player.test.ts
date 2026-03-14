@@ -3,7 +3,11 @@ import {
   RegisterPlayer,
   InvalidNicknameError,
 } from '@application/use-cases/RegisterPlayer';
-import { FakePlayerRepository, SilentLogger } from './fakes/index';
+import {
+  FakePlayerRepository,
+  FakeTokenService,
+  SilentLogger,
+} from './fakes/index';
 
 describe('RegisterPlayer', () => {
   let playerRepo: FakePlayerRepository;
@@ -11,7 +15,11 @@ describe('RegisterPlayer', () => {
 
   beforeEach(() => {
     playerRepo = new FakePlayerRepository();
-    registerPlayer = new RegisterPlayer(playerRepo, new SilentLogger());
+    registerPlayer = new RegisterPlayer(
+      playerRepo,
+      new FakeTokenService(),
+      new SilentLogger(),
+    );
   });
 
   it('should register a new player', async () => {

@@ -20,3 +20,5 @@ export {
   PokemonAlreadyDefeatedError,
   InsufficientPokemonError,
 } from './PokemonErrors';
+export { AuthenticationError } from './AuthErrors';
+export { InvalidInputError } from '../guards';

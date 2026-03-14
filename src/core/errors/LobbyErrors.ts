@@ -2,7 +2,7 @@ import { BusinessError } from './BusinessError';
 
 export class LobbyFullError extends BusinessError {
   constructor() {
-    super('LOBBY_FULL', 'The lobby already has 2 players');
+    super('LOBBY_FULL', 'The lobby already has 2 players', 409);
   }
 }
 

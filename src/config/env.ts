@@ -9,6 +9,7 @@ const envSchema = z.object({
   POKEMON_API_BASE_URL: z.url({
     message: 'POKEMON_API_BASE_URL must be a valid URL',
   }),
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
