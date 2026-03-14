@@ -6,6 +6,8 @@ import type {
 import type { ILogger } from '@core/interfaces/index';
 import { PokemonCacheModel } from '@infrastructure/database/mongo/schemas/PokemonCacheSchema';
 
+const STALE_THRESHOLD_MS = 12 * 60 * 60 * 1000; // 12 hours — revalidate in background
+
 export class CachedPokemonApiService implements IPokemonApiService {
   constructor(
     private readonly externalApi: IPokemonApiService,
@@ -13,15 +15,22 @@ export class CachedPokemonApiService implements IPokemonApiService {
   ) {}
 
   async getList(): Promise<PokemonCatalogItem[]> {
-    const cachedCount = await PokemonCacheModel.countDocuments();
+    const cached = await PokemonCacheModel.find().sort({ pokedexId: 1 }).lean();
 
-    if (cachedCount > 0) {
+    if (cached.length > 0) {
       this.logger.debug('Returning pokemon catalog from MongoDB cache', {
-        cachedCount,
+        cachedCount: cached.length,
       });
-      const cached = await PokemonCacheModel.find()
-        .sort({ pokedexId: 1 })
-        .lean();
+
+      // SWR: serve stale, revalidate in background if older than threshold
+      const oldest = cached.reduce(
+        (min, doc) => (doc.updatedAt < min ? doc.updatedAt : min),
+        cached[0].updatedAt,
+      );
+      if (Date.now() - new Date(oldest).getTime() > STALE_THRESHOLD_MS) {
+        this.revalidateInBackground();
+      }
+
       return cached.map((doc) => ({
         id: doc.pokedexId,
         name: doc.name,
@@ -41,6 +50,20 @@ export class CachedPokemonApiService implements IPokemonApiService {
       count: details.length,
     });
     return catalog;
+  }
+
+  private revalidateInBackground(): void {
+    this.logger.info('SWR: revalidating pokemon cache in background');
+    this.externalApi
+      .getList()
+      .then((catalog) => this.externalApi.getByIds(catalog.map((p) => p.id)))
+      .then((details) => this.persistDetails(details))
+      .then(() => this.logger.info('SWR: pokemon cache revalidated'))
+      .catch((err) =>
+        this.logger.warn('SWR: background revalidation failed', {
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
   }
 
   async getById(id: number): Promise<PokemonDetail> {
@@ -99,7 +122,9 @@ export class CachedPokemonApiService implements IPokemonApiService {
       results.push(...fetched);
     }
 
-    return ids.map((id) => results.find((r) => r.id === id)!);
+    return ids
+      .map((id) => results.find((r) => r.id === id))
+      .filter((r): r is PokemonDetail => r !== undefined);
   }
 
   private async persistDetails(details: PokemonDetail[]): Promise<void> {
