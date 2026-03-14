@@ -9,28 +9,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
+  quality:
+    name: Quality
+    uses: ./.github/workflows/quality.yml
 
   deploy:
     name: CDK Deploy
-    needs: test
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       id-token: write

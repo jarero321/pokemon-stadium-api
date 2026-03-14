@@ -1,0 +1,46 @@
+name: Quality
+
+on:
+  workflow_call:
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm test
+
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      - name: Start MongoDB replica set
+        run: docker compose -f docker-compose.e2e.yml up -d --wait
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+
+      - name: Stop MongoDB
+        if: always()
+        run: docker compose -f docker-compose.e2e.yml down
