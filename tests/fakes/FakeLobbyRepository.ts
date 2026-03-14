@@ -11,9 +11,9 @@ export class FakeLobbyRepository implements ILobbyRepository {
   }
 
   async create(lobby: Lobby): Promise<Lobby> {
-    lobby._id = `lobby-${this.idCounter++}`;
-    this.lobbies.push(lobby);
-    return structuredClone(lobby);
+    const created = { ...lobby, _id: `lobby-${this.idCounter++}` };
+    this.lobbies.push(created);
+    return structuredClone(created);
   }
 
   async update(lobby: Lobby): Promise<Lobby> {

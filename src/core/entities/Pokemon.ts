@@ -1,12 +1,12 @@
 export interface Pokemon {
-  id: number;
-  name: string;
-  type: string[];
-  hp: number;
-  maxHp: number;
-  attack: number;
-  defense: number;
-  speed: number;
-  sprite: string;
-  defeated: boolean;
+  readonly id: number;
+  readonly name: string;
+  readonly type: string[];
+  readonly hp: number;
+  readonly maxHp: number;
+  readonly attack: number;
+  readonly defense: number;
+  readonly speed: number;
+  readonly sprite: string;
+  readonly defeated: boolean;
 }

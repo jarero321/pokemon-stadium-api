@@ -10,7 +10,9 @@ export function errorHandler(
   const traceId = request.traceId;
 
   if (error instanceof BusinessError) {
-    reply.status(400).send(fail(error.code, error.message, traceId));
+    reply
+      .status(error.statusCode)
+      .send(fail(error.code, error.message, traceId));
     return;
   }
 

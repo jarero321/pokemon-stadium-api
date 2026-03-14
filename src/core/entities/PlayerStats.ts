@@ -1,9 +1,9 @@
 export interface PlayerStats {
-  _id?: string;
-  nickname: string;
-  wins: number;
-  losses: number;
-  totalBattles: number;
-  winRate: number;
-  battleHistory: string[];
+  readonly _id?: string;
+  readonly nickname: string;
+  readonly wins: number;
+  readonly losses: number;
+  readonly totalBattles: number;
+  readonly winRate: number;
+  readonly battleHistory: readonly string[];
 }

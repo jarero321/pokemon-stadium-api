@@ -50,6 +50,8 @@ const pokemonCacheSchema = new Schema(
   { timestamps: true },
 );
 
+pokemonCacheSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 86400 });
+
 export const PokemonCacheModel = mongoose.model(
   'PokemonCache',
   pokemonCacheSchema,

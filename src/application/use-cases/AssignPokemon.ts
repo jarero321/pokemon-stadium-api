@@ -9,6 +9,8 @@ import {
   PlayerNotInLobbyError,
   InvalidPlayerStatusError,
 } from '@core/errors/index';
+import { updatePlayer } from '@core/operations/lobby';
+import { assignTeam, setStatus } from '@core/operations/player';
 
 const TEAM_SIZE = 3;
 
@@ -63,7 +65,7 @@ export class AssignPokemon {
       randomlySelectedPokemon.map((pokemon) => pokemon.id),
     );
 
-    requestingPlayer.team = selectedPokemonDetails.map(
+    const team: Pokemon[] = selectedPokemonDetails.map(
       (pokemonDetail): Pokemon => ({
         id: pokemonDetail.id,
         name: pokemonDetail.name,
@@ -78,17 +80,17 @@ export class AssignPokemon {
       }),
     );
 
-    requestingPlayer.activePokemonIndex = 0;
-    requestingPlayer.status = PlayerStatus.TEAM_ASSIGNED;
-    lobby.updatedAt = new Date();
+    let updatedPlayer = assignTeam(requestingPlayer, team);
+    updatedPlayer = setStatus(updatedPlayer, PlayerStatus.TEAM_ASSIGNED);
 
-    const updatedLobby = await this.lobbyRepository.update(lobby);
+    const updatedLobby = updatePlayer(lobby, playerId, updatedPlayer);
+    const persistedLobby = await this.lobbyRepository.update(updatedLobby);
 
     this.logger.info('Pokemon team assigned', {
       nickname: requestingPlayer.nickname,
-      team: requestingPlayer.team.map((pokemon) => pokemon.name),
+      team: team.map((pokemon) => pokemon.name),
     });
 
-    return updatedLobby;
+    return persistedLobby;
   }
 }

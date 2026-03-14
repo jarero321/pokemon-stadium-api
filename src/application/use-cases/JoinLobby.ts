@@ -7,6 +7,8 @@ import {
   PlayerAlreadyInLobbyError,
   LobbyNotInStateError,
 } from '@core/errors/index';
+import { guardNonEmptyString } from '@core/guards';
+import { addPlayer } from '@core/operations/lobby';
 
 const MAX_PLAYERS_PER_LOBBY = 2;
 
@@ -17,6 +19,9 @@ export class JoinLobby {
   ) {}
 
   async execute(nickname: string, playerId: string): Promise<Lobby> {
+    guardNonEmptyString(nickname, 'nickname');
+    guardNonEmptyString(playerId, 'playerId');
+
     this.logger.info('Player attempting to join lobby', {
       nickname,
     });
@@ -53,16 +58,14 @@ export class JoinLobby {
       throw new PlayerAlreadyInLobbyError();
     }
 
-    activeLobby.players.push({
+    const lobbyWithPlayer = addPlayer(
+      activeLobby,
       nickname,
       playerId,
-      status: PlayerStatus.JOINED,
-      team: [],
-      activePokemonIndex: 0,
-    });
+      PlayerStatus.JOINED,
+    );
 
-    activeLobby.updatedAt = new Date();
-    const updatedLobby = await this.lobbyRepository.update(activeLobby);
+    const updatedLobby = await this.lobbyRepository.update(lobbyWithPlayer);
 
     this.logger.info('Player joined lobby', {
       nickname,

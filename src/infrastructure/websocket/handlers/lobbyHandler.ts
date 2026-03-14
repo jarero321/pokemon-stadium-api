@@ -7,7 +7,6 @@ import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
 import { mapLobbyToDTO } from '../mapLobbyToDTO';
-import { joinLobbySchema } from '../schemas';
 
 interface LobbyHandlerDependencies {
   io: Server;
@@ -29,17 +28,8 @@ export function registerLobbyHandler(
 
   socket.on(
     ClientEvent.JOIN_LOBBY,
-    withErrorBoundary(socket, handlerLogger, async (rawData: unknown) => {
-      const parsed = joinLobbySchema.safeParse(rawData);
-      if (!parsed.success) {
-        socket.emit(ServerEvent.ERROR, {
-          code: 'INVALID_PAYLOAD',
-          message: parsed.error.issues[0].message,
-        });
-        return;
-      }
-
-      const { nickname } = parsed.data;
+    withErrorBoundary(socket, handlerLogger, async () => {
+      const nickname = socket.data.nickname as string;
 
       if (registry.isSocketRegistered(socket.id)) {
         socket.emit(ServerEvent.ERROR, {
@@ -94,7 +84,17 @@ export function registerLobbyHandler(
         return;
       }
 
-      const { lobby, battleStarted } = await playerReady.execute(socket.id);
+      const { lobby, battleStarted, readyLobby } = await playerReady.execute(
+        socket.id,
+        crypto.randomUUID(),
+      );
+
+      if (readyLobby) {
+        io.to(registry.lobbyRoom).emit(
+          ServerEvent.LOBBY_STATUS,
+          mapLobbyToDTO(readyLobby),
+        );
+      }
 
       io.to(registry.lobbyRoom).emit(
         ServerEvent.LOBBY_STATUS,

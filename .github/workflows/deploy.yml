@@ -1,0 +1,42 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Quality
+    uses: ./.github/workflows/quality.yml
+
+  deploy:
+    name: CDK Deploy
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install CDK dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: CDK Deploy
+        working-directory: infra
+        run: npx cdk deploy --all --require-approval never
