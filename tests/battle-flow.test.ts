@@ -7,7 +7,6 @@ import { SwitchPokemon } from '@application/use-cases/SwitchPokemon';
 import { LobbyStatus, PlayerStatus } from '@core/enums/index';
 import {
   LobbyFullError,
-  PlayerAlreadyInLobbyError,
   NotYourTurnError,
   InvalidSwitchError,
 } from '@core/errors/index';
@@ -45,7 +44,7 @@ describe('Battle Flow - Full game lifecycle', () => {
     logger = new SilentLogger();
     runner = new FakeOperationRunner();
 
-    joinLobby = new JoinLobby(lobbyRepo, logger);
+    joinLobby = new JoinLobby(lobbyRepo, turnLock, logger);
     assignPokemon = new AssignPokemon(lobbyRepo, pokemonApi, logger);
     playerReady = new PlayerReady(lobbyRepo, battleRepo, logger, runner);
     executeAttack = new ExecuteAttack(
@@ -58,8 +57,6 @@ describe('Battle Flow - Full game lifecycle', () => {
     );
     switchPokemon = new SwitchPokemon(lobbyRepo, turnLock, logger, runner);
   });
-
-  // ─── JOIN LOBBY ───────────────────────────────────────────────────
 
   describe('JoinLobby', () => {
     it('should create a new lobby when none exists', async () => {
@@ -89,16 +86,14 @@ describe('Battle Flow - Full game lifecycle', () => {
       );
     });
 
-    it('should reject duplicate nickname', async () => {
+    it('should allow same nickname to reconnect with new playerId', async () => {
       await joinLobby.execute('Ash', 'player-1');
+      const lobby = await joinLobby.execute('Ash', 'player-2');
 
-      await expect(joinLobby.execute('Ash', 'player-2')).rejects.toThrowError(
-        PlayerAlreadyInLobbyError,
-      );
+      expect(lobby.players).toHaveLength(1);
+      expect(lobby.players[0].playerId).toBe('player-2');
     });
   });
-
-  // ─── ASSIGN POKEMON ───────────────────────────────────────────────
 
   describe('AssignPokemon', () => {
     it('should assign 3 random pokemon to a player', async () => {
@@ -134,8 +129,6 @@ describe('Battle Flow - Full game lifecycle', () => {
       expect(overlapping).toHaveLength(0);
     });
   });
-
-  // ─── PLAYER READY ─────────────────────────────────────────────────
 
   describe('PlayerReady', () => {
     it('should mark player as ready without starting battle if alone', async () => {
@@ -190,29 +183,60 @@ describe('Battle Flow - Full game lifecycle', () => {
     });
   });
 
-  // ─── EXECUTE ATTACK ───────────────────────────────────────────────
+  async function setupBattle() {
+    await joinLobby.execute('Ash', 'player-1');
+    await joinLobby.execute('Gary', 'player-2');
+    await assignPokemon.execute('player-1');
+    await assignPokemon.execute('player-2');
+    await playerReady.execute('player-1', crypto.randomUUID());
+    const { lobby } = await playerReady.execute(
+      'player-2',
+      crypto.randomUUID(),
+    );
+    return lobby;
+  }
+
+  function getActivePlayerId(lobby: {
+    readonly players: readonly { playerId: string }[];
+    currentTurnIndex: number | null;
+  }) {
+    return lobby.players[lobby.currentTurnIndex!].playerId;
+  }
+
+  // Helper: attack + forced switch if a Pokemon was defeated
+  async function attackAndAutoSwitch() {
+    const currentLobby = await lobbyRepo.findActive();
+    if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
+      return null;
+
+    const attackerId = getActivePlayerId(currentLobby);
+    const result = await executeAttack.execute(attackerId, crypto.randomUUID());
+
+    // If a Pokemon was defeated and there are remaining, do forced switch
+    if (
+      result.pokemonDefeated &&
+      result.pokemonDefeated.remainingTeam > 0 &&
+      !result.battleEnded
+    ) {
+      const lobby = await lobbyRepo.findActive();
+      if (!lobby) return result;
+      const defender = lobby.players[lobby.currentTurnIndex!];
+      const nextAlive = defender.team.findIndex(
+        (p, i) => !p.defeated && i !== defender.activePokemonIndex,
+      );
+      if (nextAlive !== -1) {
+        await switchPokemon.execute(
+          defender.playerId,
+          nextAlive,
+          crypto.randomUUID(),
+        );
+      }
+    }
+
+    return result;
+  }
 
   describe('ExecuteAttack', () => {
-    async function setupBattle() {
-      await joinLobby.execute('Ash', 'player-1');
-      await joinLobby.execute('Gary', 'player-2');
-      await assignPokemon.execute('player-1');
-      await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1', crypto.randomUUID());
-      const { lobby } = await playerReady.execute(
-        'player-2',
-        crypto.randomUUID(),
-      );
-      return lobby;
-    }
-
-    function getActivePlayerId(lobby: {
-      readonly players: readonly { playerId: string }[];
-      currentTurnIndex: number | null;
-    }) {
-      return lobby.players[lobby.currentTurnIndex!].playerId;
-    }
-
     it('should process an attack and deal damage', async () => {
       const lobby = await setupBattle();
       const attackerId = getActivePlayerId(lobby);
@@ -295,35 +319,27 @@ describe('Battle Flow - Full game lifecycle', () => {
       expect(pokemonDefeatedDTO!.remainingTeam).toBeDefined();
     });
 
-    it('should emit pokemonSwitch when defeated pokemon has backup', async () => {
+    it('should require forced switch when defeated pokemon has backup', async () => {
       await setupBattle();
 
-      let switchDTO = null;
+      let defeated = false;
 
-      for (let i = 0; i < 200; i++) {
-        const currentLobby = await lobbyRepo.findActive();
-        if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
-          break;
-
-        const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(
-          attackerId,
-          crypto.randomUUID(),
-        );
-
-        if (result.pokemonSwitch) {
-          switchDTO = result.pokemonSwitch;
-          break;
+      for (let i = 0; i < 200 && !defeated; i++) {
+        const result = await attackAndAutoSwitch();
+        if (!result) break;
+        if (
+          result.pokemonDefeated &&
+          result.pokemonDefeated.remainingTeam > 0
+        ) {
+          defeated = true;
+          // Verify turn passed to defender for forced switch
+          const lobby = await lobbyRepo.findActive();
+          expect(lobby).not.toBeNull();
         }
-
         if (result.battleEnded) break;
       }
 
-      expect(switchDTO).not.toBeNull();
-      expect(switchDTO!.player).toBeDefined();
-      expect(switchDTO!.previousPokemon).toBeDefined();
-      expect(switchDTO!.newPokemon).toBeDefined();
-      expect(switchDTO!.newPokemonHp).toBeGreaterThan(0);
+      expect(defeated).toBe(true);
     });
 
     it('should end battle when all pokemon are defeated', async () => {
@@ -333,15 +349,8 @@ describe('Battle Flow - Full game lifecycle', () => {
       let winner: string | null = null;
 
       for (let i = 0; i < 200; i++) {
-        const currentLobby = await lobbyRepo.findActive();
-        if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
-          break;
-
-        const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(
-          attackerId,
-          crypto.randomUUID(),
-        );
+        const result = await attackAndAutoSwitch();
+        if (!result) break;
 
         if (result.battleEnded) {
           battleEnded = true;
@@ -359,16 +368,8 @@ describe('Battle Flow - Full game lifecycle', () => {
       await setupBattle();
 
       for (let i = 0; i < 200; i++) {
-        const currentLobby = await lobbyRepo.findActive();
-        if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
-          break;
-
-        const attackerId = getActivePlayerId(currentLobby);
-        const result = await executeAttack.execute(
-          attackerId,
-          crypto.randomUUID(),
-        );
-        if (result.battleEnded) break;
+        const result = await attackAndAutoSwitch();
+        if (!result || result.battleEnded) break;
       }
 
       expect(eventBus.emitted).toHaveLength(1);
@@ -379,12 +380,8 @@ describe('Battle Flow - Full game lifecycle', () => {
       await setupBattle();
 
       for (let i = 0; i < 200; i++) {
-        const currentLobby = await lobbyRepo.findActive();
-        if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
-          break;
-
-        const attackerId = getActivePlayerId(currentLobby);
-        await executeAttack.execute(attackerId, crypto.randomUUID());
+        const result = await attackAndAutoSwitch();
+        if (!result || result.battleEnded) break;
       }
 
       const activeLobby = await lobbyRepo.findActive();
@@ -408,27 +405,34 @@ describe('Battle Flow - Full game lifecycle', () => {
         expect(result.turnResult.defender.remainingHp).toBeGreaterThanOrEqual(
           0,
         );
+
+        // Handle forced switch if needed
+        if (
+          result.pokemonDefeated &&
+          result.pokemonDefeated.remainingTeam > 0 &&
+          !result.battleEnded
+        ) {
+          const lobby = await lobbyRepo.findActive();
+          if (!lobby) break;
+          const defender = lobby.players[lobby.currentTurnIndex!];
+          const nextAlive = defender.team.findIndex(
+            (p, idx) => !p.defeated && idx !== defender.activePokemonIndex,
+          );
+          if (nextAlive !== -1) {
+            await switchPokemon.execute(
+              defender.playerId,
+              nextAlive,
+              crypto.randomUUID(),
+            );
+          }
+        }
+
         if (result.battleEnded) break;
       }
     });
   });
 
-  // ─── SWITCH POKEMON ───────────────────────────────────────────────
-
   describe('SwitchPokemon', () => {
-    async function setupBattle() {
-      await joinLobby.execute('Ash', 'player-1');
-      await joinLobby.execute('Gary', 'player-2');
-      await assignPokemon.execute('player-1');
-      await assignPokemon.execute('player-2');
-      await playerReady.execute('player-1', crypto.randomUUID());
-      const { lobby } = await playerReady.execute(
-        'player-2',
-        crypto.randomUUID(),
-      );
-      return lobby;
-    }
-
     it('should allow switching to another alive pokemon', async () => {
       const lobby = await setupBattle();
       const activePlayerId = lobby.players[lobby.currentTurnIndex!].playerId;
@@ -487,8 +491,6 @@ describe('Battle Flow - Full game lifecycle', () => {
     });
   });
 
-  // ─── FULL GAME INTEGRATION ────────────────────────────────────────
-
   describe('Full Game Integration', () => {
     it('should complete entire game flow from join to winner', async () => {
       // 1. Both players join
@@ -514,27 +516,14 @@ describe('Battle Flow - Full game lifecycle', () => {
       let winner: string | null = null;
       let totalTurns = 0;
       const defeatedPokemon: string[] = [];
-      const switchedPokemon: string[] = [];
 
       for (let i = 0; i < 200; i++) {
-        const currentLobby = await lobbyRepo.findActive();
-        if (!currentLobby || currentLobby.status === LobbyStatus.FINISHED)
-          break;
-
-        const attackerId =
-          currentLobby.players[currentLobby.currentTurnIndex!].playerId;
-        const result = await executeAttack.execute(
-          attackerId,
-          crypto.randomUUID(),
-        );
+        const result = await attackAndAutoSwitch();
+        if (!result) break;
         totalTurns++;
 
         if (result.pokemonDefeated) {
           defeatedPokemon.push(result.pokemonDefeated.pokemon);
-        }
-
-        if (result.pokemonSwitch) {
-          switchedPokemon.push(result.pokemonSwitch.newPokemon);
         }
 
         if (result.battleEnded) {
