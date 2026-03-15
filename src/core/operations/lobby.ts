@@ -1,12 +1,13 @@
 import type { Lobby } from '@core/entities/index';
 import type { Player } from '@core/entities/index';
-import type { LobbyStatus } from '@core/enums/index';
+import { LobbyStatus } from '@core/enums/index';
+import type { PlayerStatus } from '@core/enums/index';
 
 export function addPlayer(
   lobby: Lobby,
   nickname: string,
   playerId: string,
-  status: import('@core/enums/PlayerStatus').PlayerStatus,
+  status: PlayerStatus,
 ): Lobby {
   const newPlayer: Player = {
     nickname,
@@ -42,7 +43,7 @@ export function advanceTurn(lobby: Lobby): Lobby {
 export function finishWithWinner(lobby: Lobby, winner: string): Lobby {
   return {
     ...lobby,
-    status: 'finished' as LobbyStatus,
+    status: LobbyStatus.FINISHED,
     winner,
     updatedAt: new Date(),
   };
@@ -52,11 +53,11 @@ export function startBattle(
   lobby: Lobby,
   battleId: string,
   firstTurnIndex: number,
-  battleStatus: import('@core/enums/PlayerStatus').PlayerStatus,
+  battleStatus: PlayerStatus,
 ): Lobby {
   return {
     ...lobby,
-    status: 'battling' as LobbyStatus,
+    status: LobbyStatus.BATTLING,
     battleId,
     currentTurnIndex: firstTurnIndex,
     players: lobby.players.map((p) => ({ ...p, status: battleStatus })),
@@ -66,4 +67,8 @@ export function startBattle(
 
 export function setLobbyStatus(lobby: Lobby, status: LobbyStatus): Lobby {
   return { ...lobby, status, updatedAt: new Date() };
+}
+
+export function assignTurnToPlayer(lobby: Lobby, playerIndex: number): Lobby {
+  return { ...lobby, currentTurnIndex: playerIndex, updatedAt: new Date() };
 }

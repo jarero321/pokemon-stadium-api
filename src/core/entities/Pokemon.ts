@@ -1,7 +1,7 @@
 export interface Pokemon {
   readonly id: number;
   readonly name: string;
-  readonly type: string[];
+  readonly type: readonly string[];
   readonly hp: number;
   readonly maxHp: number;
   readonly attack: number;

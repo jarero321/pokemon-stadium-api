@@ -1,4 +1,5 @@
-export { applyDamage } from './combat';
+export { applyDamage, calculateDamage, determineFirstTurn } from './combat';
+export type { DamageResult } from './combat';
 export {
   addPlayer,
   updatePlayer,
@@ -6,6 +7,7 @@ export {
   finishWithWinner,
   startBattle,
   setLobbyStatus,
+  assignTurnToPlayer,
 } from './lobby';
 export {
   assignTeam,

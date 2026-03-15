@@ -123,17 +123,21 @@ const effectivenessTable: EffectivenessMap = {
 };
 
 export function getTypeMultiplier(
-  attackerTypes: string[],
-  defenderTypes: string[],
+  attackerTypes: readonly string[],
+  defenderTypes: readonly string[],
 ): number {
+  // Use the attacker's primary type for the attack.
+  // Apply against ALL defender types (dual-type defense stacks).
+  // Example: Grass vs Rock/Ground = Grass→Rock (0.5) × Grass→Ground (1.5) = 0.75
+  const atkType = attackerTypes[0];
+  if (!atkType) return 1;
+
   let multiplier = 1;
 
-  for (const atkType of attackerTypes) {
-    for (const defType of defenderTypes) {
-      const effectiveness = effectivenessTable[atkType]?.[defType];
-      if (effectiveness !== undefined) {
-        multiplier *= effectiveness;
-      }
+  for (const defType of defenderTypes) {
+    const effectiveness = effectivenessTable[atkType]?.[defType];
+    if (effectiveness !== undefined) {
+      multiplier *= effectiveness;
     }
   }
 
