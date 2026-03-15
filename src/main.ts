@@ -18,7 +18,6 @@ import { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
-import { ResetLobby } from '@application/listeners/ResetLobby';
 import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import type { BattleFinishedEvent } from '@core/events/index';
 import { createHttpServer } from '@infrastructure/http/server';
@@ -33,29 +32,32 @@ async function bootstrap() {
     port: env.PORT,
   });
 
-  // ── Database ──────────────────────────────────────────────
   await connectToMongo(env.MONGODB_URI, logger);
 
-  // ── Repositories ──────────────────────────────────────────
+  // Repositories
   const lobbyRepository = new MongoLobbyRepository();
+  await lobbyRepository.reset(); // clean stale lobbies from previous runs
+  logger.info('Stale lobbies cleaned up');
+
   const battleRepository = new MongoBattleRepository();
   const playerRepository = new MongoPlayerRepository();
 
-  // ── External Services ─────────────────────────────────────
+  // External services
   const externalPokemonApi = new PokemonApiService(
     env.POKEMON_API_BASE_URL,
     logger,
   );
   const pokemonApi = new CachedPokemonApiService(externalPokemonApi, logger);
 
-  // ── Infrastructure ────────────────────────────────────────
+  // Infrastructure
   const tokenService = new JwtTokenService(env.JWT_SECRET);
   const eventBus = new EventBus(logger);
   const turnLock = new InMemoryTurnLock();
   const operationRunner = new MongoOperationRunner(logger);
 
-  // ── Use Cases (WebSocket) ─────────────────────────────────
-  const joinLobby = new JoinLobby(lobbyRepository, logger);
+  // Use cases (WebSocket)
+  const lobbyLock = new InMemoryTurnLock();
+  const joinLobby = new JoinLobby(lobbyRepository, lobbyLock, logger);
   const assignPokemon = new AssignPokemon(lobbyRepository, pokemonApi, logger);
   const playerReady = new PlayerReady(
     lobbyRepository,
@@ -78,7 +80,7 @@ async function bootstrap() {
     operationRunner,
   );
 
-  // ── Use Cases (REST) ──────────────────────────────────────
+  // Use cases (REST)
   const getPokemonCatalog = new GetPokemonCatalog(pokemonApi, logger);
   const getLeaderboard = new GetLeaderboard(playerRepository, logger);
   const getPlayerHistory = new GetPlayerHistory(
@@ -92,8 +94,7 @@ async function bootstrap() {
     logger,
   );
 
-  // ── Event Listeners ───────────────────────────────────────
-  const resetLobby = new ResetLobby(lobbyRepository, logger);
+  // Event listeners
   const updateLeaderboard = new UpdateLeaderboard(
     playerRepository,
     logger,
@@ -101,13 +102,10 @@ async function bootstrap() {
   );
 
   eventBus.on<BattleFinishedEvent>('BattleFinished', (event) =>
-    resetLobby.handle(event),
-  );
-  eventBus.on<BattleFinishedEvent>('BattleFinished', (event) =>
     updateLeaderboard.handle(event),
   );
 
-  // ── HTTP Server (Fastify) ─────────────────────────────────
+  // HTTP server
   const fastify = await createHttpServer({
     getPokemonCatalog,
     getLeaderboard,
@@ -115,11 +113,12 @@ async function bootstrap() {
     registerPlayer,
     tokenService,
     logger,
+    corsOrigin: env.CORS_ORIGIN,
   });
 
   await fastify.ready();
 
-  // ── Socket.IO (attached to Fastify's HTTP server) ─────────
+  // Socket.IO server
   createSocketServer(fastify.server, {
     joinLobby,
     assignPokemon,
@@ -127,15 +126,16 @@ async function bootstrap() {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    eventBus,
     tokenService,
     logger,
+    corsOrigin: env.CORS_ORIGIN,
   });
 
-  // ── Start ─────────────────────────────────────────────────
   await fastify.listen({ port: env.PORT, host: env.HOST });
   logger.info(`Server listening on http://${env.HOST}:${env.PORT}`);
 
-  // ── Graceful Shutdown ───────────────────────────────────
+  // Graceful shutdown
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully...`);
     await fastify.close();

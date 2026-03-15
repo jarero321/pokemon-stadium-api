@@ -20,14 +20,18 @@ interface HttpServerDependencies {
   registerPlayer: RegisterPlayer;
   tokenService: ITokenService;
   logger: ILogger;
+  corsOrigin: string;
 }
 
 export async function createHttpServer(dependencies: HttpServerDependencies) {
-  const { logger, tokenService, ...useCases } = dependencies;
+  const { logger, tokenService, corsOrigin, ...useCases } = dependencies;
 
   const app = Fastify({ logger: false });
 
-  await app.register(fastifyCors, { origin: '*' });
+  await app.register(fastifyCors, {
+    origin:
+      corsOrigin === '*' ? true : corsOrigin.split(',').map((s) => s.trim()),
+  });
 
   await app.register(fastifyRateLimit, {
     max: 100,
