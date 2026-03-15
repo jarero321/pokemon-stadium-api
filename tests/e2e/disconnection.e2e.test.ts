@@ -47,8 +47,6 @@ describe('Disconnection E2E', () => {
     await server.cleanup();
   });
 
-  // ── Disconnect During Lobby ─────────────────────────────────
-
   describe('Disconnect during lobby phase', () => {
     it('should handle player disconnect while waiting for opponent', async () => {
       const { token } = await registerPlayer(server.url, 'Ash');
@@ -107,8 +105,6 @@ describe('Disconnection E2E', () => {
       }
     });
   });
-
-  // ── Disconnect During Battle ────────────────────────────────
 
   describe('Disconnect during battle', () => {
     async function setupBattle(url: string) {
@@ -201,8 +197,6 @@ describe('Disconnection E2E', () => {
     });
   });
 
-  // ── Reconnection Scenarios ──────────────────────────────────
-
   describe('Reconnection', () => {
     it('should allow reconnecting with the same token after disconnect', async () => {
       const { token } = await registerPlayer(server.url, 'Ash');
@@ -247,8 +241,6 @@ describe('Disconnection E2E', () => {
       }
     });
   });
-
-  // ── Rapid Connect/Disconnect ────────────────────────────────
 
   describe('Rapid connect/disconnect', () => {
     it('should handle rapid disconnect and reconnect without crashing', async () => {

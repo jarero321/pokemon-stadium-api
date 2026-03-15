@@ -17,7 +17,6 @@ import { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
-import { ResetLobby } from '@application/listeners/ResetLobby';
 import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import { createHttpServer } from '@infrastructure/http/server';
 import { createSocketServer } from '@infrastructure/websocket/socketServer';
@@ -48,7 +47,8 @@ export async function createTestServer(): Promise<TestServer> {
   const turnLock = new InMemoryTurnLock();
   const operationRunner = new MongoOperationRunner(logger);
 
-  const joinLobby = new JoinLobby(lobbyRepository, logger);
+  const lobbyLock = new InMemoryTurnLock();
+  const joinLobby = new JoinLobby(lobbyRepository, lobbyLock, logger);
   const assignPokemon = new AssignPokemon(lobbyRepository, pokemonApi, logger);
   const playerReady = new PlayerReady(
     lobbyRepository,
@@ -83,14 +83,10 @@ export async function createTestServer(): Promise<TestServer> {
     logger,
   );
 
-  const resetLobby = new ResetLobby(lobbyRepository, logger);
   const updateLeaderboard = new UpdateLeaderboard(
     playerRepository,
     logger,
     operationRunner,
-  );
-  eventBus.on<BattleFinishedEvent>('BattleFinished', (event) =>
-    resetLobby.handle(event),
   );
   eventBus.on<BattleFinishedEvent>('BattleFinished', (event) =>
     updateLeaderboard.handle(event),
@@ -103,6 +99,7 @@ export async function createTestServer(): Promise<TestServer> {
     registerPlayer,
     tokenService,
     logger,
+    corsOrigin: '*',
   });
 
   await fastify.ready();
@@ -114,8 +111,10 @@ export async function createTestServer(): Promise<TestServer> {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    eventBus,
     tokenService,
     logger,
+    corsOrigin: '*',
   });
 
   await fastify.listen({ port: 0, host: '127.0.0.1' });
@@ -139,8 +138,6 @@ export async function clearDatabase(): Promise<void> {
     await collections[key].deleteMany({});
   }
 }
-
-// ── Test Helpers ──────────────────────────────────────────────
 
 interface RegisterResult {
   token: string;

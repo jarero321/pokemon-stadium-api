@@ -25,8 +25,6 @@ describe('Auth E2E', () => {
     await server.cleanup();
   });
 
-  // ── HTTP Registration ───────────────────────────────────────
-
   describe('POST /api/players/register', () => {
     it('should return a JWT token for a new player', async () => {
       const result = await registerPlayer(server.url, 'Ash');
@@ -62,8 +60,6 @@ describe('Auth E2E', () => {
       expect(json.success).toBe(false);
     });
   });
-
-  // ── WebSocket Authentication ────────────────────────────────
 
   describe('WebSocket Authentication', () => {
     it('should reject connection without token', async () => {
@@ -122,8 +118,6 @@ describe('Auth E2E', () => {
     });
   });
 
-  // ── WebSocket uses token nickname ───────────────────────────
-
   describe('WebSocket uses nickname from token', () => {
     it('should use the token nickname when joining lobby', async () => {
       const { token } = await registerPlayer(server.url, 'Ash');
@@ -147,8 +141,6 @@ describe('Auth E2E', () => {
       }
     });
   });
-
-  // ── Protected HTTP Routes ─────────────────────────────────
 
   describe('Protected Routes', () => {
     it('GET /api/players/:nickname/history should reject without token', async () => {

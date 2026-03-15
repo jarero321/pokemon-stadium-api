@@ -62,8 +62,6 @@ describe('Game Flow E2E', () => {
     await server.cleanup();
   });
 
-  // ── REST Endpoints ──────────────────────────────────────────
-
   describe('REST Endpoints', () => {
     it('GET /api/health should return healthy', async () => {
       const json = await fetchJson<
@@ -95,8 +93,6 @@ describe('Game Flow E2E', () => {
       expect(json.data).toEqual([]);
     });
   });
-
-  // ── Full Game Lifecycle ─────────────────────────────────────
 
   describe('Full Game Lifecycle', () => {
     it('should complete entire flow from registration to battle winner', async () => {
@@ -310,8 +306,6 @@ describe('Game Flow E2E', () => {
       }
     });
   });
-
-  // ── Pokemon Switch During Battle ────────────────────────────
 
   describe('Pokemon Switch', () => {
     async function setupBattleState(
