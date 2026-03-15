@@ -39,6 +39,21 @@ export function registerLobbyHandler(
         return;
       }
 
+      // Reject new socket if the nickname already has an active session
+      const existingSocket = registry.getSocketByNickname(nickname);
+      if (existingSocket && existingSocket.id !== socket.id) {
+        socket.emit(ServerEvent.ERROR, {
+          code: 'SESSION_REPLACED',
+          message: 'This trainer already has an active session',
+        });
+        handlerLogger.info('Duplicate nickname rejected', {
+          nickname,
+          existingSocketId: existingSocket.id,
+          rejectedSocketId: socket.id,
+        });
+        return;
+      }
+
       const lobby = await joinLobby.execute(nickname, socket.id);
 
       registry.register(socket, nickname);

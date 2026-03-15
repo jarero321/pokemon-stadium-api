@@ -77,6 +77,8 @@ export function registerBattleHandler(
           battleId: result.lobby.battleId,
         });
 
+        // Clear registry so players can re-join for a new game
+        registry.clear();
         handlerLogger.info('Battle ended', { winner: result.winner });
       }
 

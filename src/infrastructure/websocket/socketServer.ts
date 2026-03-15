@@ -13,7 +13,12 @@ import { registerBattleHandler } from './handlers/battleHandler';
 import { ServerEvent } from './SocketEvents';
 import { mapLobbyToDTO } from './mapLobbyToDTO';
 import { LobbyStatus } from '@core/enums/index';
-import type { ILobbyRepository, ITokenService } from '@core/interfaces/index';
+import type {
+  ILobbyRepository,
+  ITokenService,
+  IEventBus,
+} from '@core/interfaces/index';
+import { createBattleFinishedEvent } from '@core/events/index';
 
 interface SocketServerDependencies {
   joinLobby: JoinLobby;
@@ -22,22 +27,29 @@ interface SocketServerDependencies {
   executeAttack: ExecuteAttack;
   switchPokemon: SwitchPokemon;
   lobbyRepository: ILobbyRepository;
+  eventBus: IEventBus;
   tokenService: ITokenService;
   logger: ILogger;
+  corsOrigin: string;
 }
 
 export function createSocketServer(
   httpServer: HttpServer,
   dependencies: SocketServerDependencies,
 ): SocketServer {
+  const { corsOrigin } = dependencies;
   const io = new SocketServer(httpServer, {
-    cors: { origin: '*' },
+    cors: {
+      origin:
+        corsOrigin === '*' ? true : corsOrigin.split(',').map((s) => s.trim()),
+    },
     pingInterval: 10000,
     pingTimeout: 5000,
   });
 
   const registry = new PlayerConnectionRegistry();
-  const { logger, lobbyRepository, tokenService, ...useCases } = dependencies;
+  const { logger, lobbyRepository, eventBus, tokenService, ...useCases } =
+    dependencies;
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -96,36 +108,79 @@ export function createSocketServer(
         const activeLobby = await lobbyRepository.findActive();
         if (!activeLobby) return;
 
-        const winner =
-          activeLobby.players.find(
-            (player) => player.nickname !== disconnectedNickname,
-          )?.nickname ?? null;
-
-        const finishedLobby = {
-          ...activeLobby,
-          winner,
-          status: LobbyStatus.FINISHED,
-          updatedAt: new Date(),
-        };
-        await lobbyRepository.update(finishedLobby);
-
-        io.to(registry.lobbyRoom).emit(ServerEvent.BATTLE_END, {
-          winner,
-          loser: disconnectedNickname,
-          reason: 'opponent_disconnected',
-        });
-
-        io.to(registry.lobbyRoom).emit(
-          ServerEvent.LOBBY_STATUS,
-          mapLobbyToDTO(finishedLobby),
+        const isInLobby = activeLobby.players.some(
+          (p) => p.nickname === disconnectedNickname,
         );
+        if (!isInLobby) return;
 
-        registry.clear();
+        if (
+          activeLobby.status === LobbyStatus.WAITING ||
+          activeLobby.status === LobbyStatus.READY
+        ) {
+          // Pre-battle: just finish the lobby, no winner
+          const finishedLobby = {
+            ...activeLobby,
+            status: LobbyStatus.FINISHED,
+            updatedAt: new Date(),
+          };
+          await lobbyRepository.update(finishedLobby);
 
-        connectionLogger.info('Lobby forfeited due to disconnect', {
-          winner: activeLobby.winner,
-          loser: disconnectedNickname,
-        });
+          io.to(registry.lobbyRoom).emit(
+            ServerEvent.LOBBY_STATUS,
+            mapLobbyToDTO(finishedLobby),
+          );
+
+          registry.clear();
+
+          connectionLogger.info(
+            'Lobby closed — player disconnected during waiting/ready',
+            { disconnected: disconnectedNickname },
+          );
+        } else {
+          // During battle: forfeit, declare winner
+          const winner =
+            activeLobby.players.find(
+              (player) => player.nickname !== disconnectedNickname,
+            )?.nickname ?? null;
+
+          const finishedLobby = {
+            ...activeLobby,
+            winner,
+            status: LobbyStatus.FINISHED,
+            updatedAt: new Date(),
+          };
+          await lobbyRepository.update(finishedLobby);
+
+          io.to(registry.lobbyRoom).emit(ServerEvent.BATTLE_END, {
+            winner,
+            loser: disconnectedNickname,
+            reason: 'opponent_disconnected',
+          });
+
+          // Update leaderboard stats for forfeit
+          if (winner && activeLobby.battleId) {
+            await eventBus.emit(
+              createBattleFinishedEvent(
+                activeLobby.battleId,
+                winner,
+                disconnectedNickname,
+                randomUUID(),
+              ),
+            );
+          }
+
+          io.to(registry.lobbyRoom).emit(
+            ServerEvent.LOBBY_STATUS,
+            mapLobbyToDTO(finishedLobby),
+          );
+
+          registry.clear();
+
+          connectionLogger.info('Lobby forfeited due to disconnect', {
+            winner,
+            loser: disconnectedNickname,
+          });
+        }
       } catch (error) {
         connectionLogger.error(
           'Error handling disconnect cleanup',
