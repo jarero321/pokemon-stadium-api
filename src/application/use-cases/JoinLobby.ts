@@ -1,20 +1,18 @@
 import type { ILogger } from '@core/interfaces/index';
+import type { ITurnLock } from '@core/interfaces/index';
 import type { ILobbyRepository } from '@core/interfaces/index';
 import type { Lobby } from '@core/entities/index';
 import { LobbyStatus, PlayerStatus } from '@core/enums/index';
-import {
-  LobbyFullError,
-  PlayerAlreadyInLobbyError,
-  LobbyNotInStateError,
-} from '@core/errors/index';
+import { LobbyFullError, LobbyNotInStateError } from '@core/errors/index';
 import { guardNonEmptyString } from '@core/guards';
-import { addPlayer } from '@core/operations/lobby';
+import { addPlayer, updatePlayer } from '@core/operations/lobby';
 
 const MAX_PLAYERS_PER_LOBBY = 2;
 
 export class JoinLobby {
   constructor(
     private readonly lobbyRepository: ILobbyRepository,
+    private readonly lobbyLock: ITurnLock,
     private readonly logger: ILogger,
   ) {}
 
@@ -22,6 +20,18 @@ export class JoinLobby {
     guardNonEmptyString(nickname, 'nickname');
     guardNonEmptyString(playerId, 'playerId');
 
+    const release = await this.lobbyLock.acquire();
+    try {
+      return await this.joinOrCreate(nickname, playerId);
+    } finally {
+      release();
+    }
+  }
+
+  private async joinOrCreate(
+    nickname: string,
+    playerId: string,
+  ): Promise<Lobby> {
     this.logger.info('Player attempting to join lobby', {
       nickname,
     });
@@ -47,15 +57,34 @@ export class JoinLobby {
       throw new LobbyNotInStateError(LobbyStatus.WAITING, activeLobby.status);
     }
 
-    if (activeLobby.players.length >= MAX_PLAYERS_PER_LOBBY) {
-      throw new LobbyFullError();
-    }
-
-    const playerAlreadyInLobby = activeLobby.players.some(
+    // Reconnection: if the nickname is already in the lobby, update their playerId
+    const existingPlayer = activeLobby.players.find(
       (player) => player.nickname === nickname,
     );
-    if (playerAlreadyInLobby) {
-      throw new PlayerAlreadyInLobbyError();
+
+    if (existingPlayer) {
+      const reconnected = {
+        ...existingPlayer,
+        playerId,
+      };
+      const updatedLobby = updatePlayer(
+        activeLobby,
+        existingPlayer.playerId,
+        reconnected,
+      );
+      const persisted = await this.lobbyRepository.update(updatedLobby);
+
+      this.logger.info('Player reconnected to lobby', {
+        nickname,
+        oldPlayerId: existingPlayer.playerId,
+        newPlayerId: playerId,
+      });
+
+      return persisted;
+    }
+
+    if (activeLobby.players.length >= MAX_PLAYERS_PER_LOBBY) {
+      throw new LobbyFullError();
     }
 
     const lobbyWithPlayer = addPlayer(

@@ -3,7 +3,7 @@ import type { LobbyStatus } from '@core/enums/index';
 export interface PokemonStateDTO {
   id: number;
   name: string;
-  type: string[];
+  type: readonly string[];
   hp: number;
   maxHp: number;
   attack: number;

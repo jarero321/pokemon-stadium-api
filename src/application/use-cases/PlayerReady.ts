@@ -10,6 +10,7 @@ import {
   LobbyNotInStateError,
   InvalidPlayerStatusError,
 } from '@core/errors/index';
+import { determineFirstTurn } from '@core/operations/combat';
 import {
   updatePlayer,
   setLobbyStatus,
@@ -92,15 +93,10 @@ export class PlayerReady {
           session,
         );
 
-        const firstActivePokemonSpeed = updatedLobby.players[0].team[0].speed;
-        const secondActivePokemonSpeed = updatedLobby.players[1].team[0].speed;
-        const firstTurnIndex =
-          firstActivePokemonSpeed >= secondActivePokemonSpeed ? 0 : 1;
-
         updatedLobby = startBattle(
           updatedLobby,
           createdBattle._id!,
-          firstTurnIndex,
+          determineFirstTurn(updatedLobby.players),
           PlayerStatus.BATTLING,
         );
 

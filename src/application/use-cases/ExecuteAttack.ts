@@ -20,19 +20,16 @@ import {
   NotYourTurnError,
   BattleNotActiveError,
 } from '@core/errors/index';
-import { getTypeMultiplier } from '@core/typeEffectiveness';
 import { createBattleFinishedEvent } from '@core/events/index';
 import { guardNonEmptyString } from '@core/guards';
-import { applyDamage } from '@core/operations/combat';
+import { calculateDamage, applyDamage } from '@core/operations/combat';
 import {
   updatePlayer,
   advanceTurn,
   finishWithWinner,
+  assignTurnToPlayer,
 } from '@core/operations/lobby';
-import {
-  switchActivePokemon,
-  updatePokemonInTeam,
-} from '@core/operations/player';
+import { updatePokemonInTeam } from '@core/operations/player';
 
 interface AttackResult {
   lobby: Lobby;
@@ -58,12 +55,30 @@ export class ExecuteAttack {
     const release = await this.turnLock.acquire();
 
     try {
-      return await this.runner.run(requestId, async (session) => {
+      const result = await this.runner.run(requestId, async (session) => {
         const lobby = await this.lobbyRepository.findActive(session);
         if (!lobby) throw new LobbyNotFoundError();
 
         return this.processAttack(playerId, lobby, session);
       });
+
+      // Emit domain events AFTER transaction commits (avoid nested transactions)
+      if (result.battleEnded && result.winner) {
+        const loser = result.lobby.players.find(
+          (p) => p.nickname !== result.winner,
+        )?.nickname;
+
+        await this.eventBus.emit(
+          createBattleFinishedEvent(
+            result.lobby.battleId!,
+            result.winner,
+            loser ?? '',
+            crypto.randomUUID(),
+          ),
+        );
+      }
+
+      return result;
     } finally {
       release();
     }
@@ -96,30 +111,26 @@ export class ExecuteAttack {
     const defendingPokemon =
       defendingPlayer.team[defendingPlayer.activePokemonIndex];
 
-    const typeMultiplier = getTypeMultiplier(
-      attackingPokemon.type,
-      defendingPokemon.type,
-    );
-
-    const rawDamage = Math.floor(
-      (attackingPokemon.attack - defendingPokemon.defense) * typeMultiplier,
+    const { damage: rawDamage, typeMultiplier } = calculateDamage(
+      attackingPokemon,
+      defendingPokemon,
     );
 
     const damagedPokemon = applyDamage(defendingPokemon, rawDamage);
     const isDefeated = damagedPokemon.defeated;
 
     // Update the defending player with the damaged pokemon
-    let updatedDefender = updatePokemonInTeam(
+    const updatedDefender = updatePokemonInTeam(
       defendingPlayer,
       defendingPlayer.activePokemonIndex,
       damagedPokemon,
     );
 
-    let nextPokemonName: string | null = null;
+    const nextPokemonName: string | null = null;
     let battleEnded = false;
     let winner: string | null = null;
     let pokemonDefeatedNotification: PokemonDefeatedDTO | null = null;
-    let pokemonSwitchNotification: PokemonSwitchDTO | null = null;
+    const pokemonSwitchNotification: PokemonSwitchDTO | null = null;
 
     if (isDefeated) {
       const remainingAlivePokemon = updatedDefender.team.filter(
@@ -149,15 +160,6 @@ export class ExecuteAttack {
         updatedLobby = finishWithWinner(updatedLobby, winner);
 
         await this.battleRepository.finish(lobby.battleId!, winner, session);
-
-        await this.eventBus.emit(
-          createBattleFinishedEvent(
-            lobby.battleId!,
-            winner,
-            defendingPlayer.nickname,
-            crypto.randomUUID(),
-          ),
-        );
 
         this.logger.info('Battle finished', {
           winner,
@@ -195,23 +197,16 @@ export class ExecuteAttack {
           winner,
         };
       } else {
-        updatedDefender = switchActivePokemon(updatedDefender, nextAliveIndex);
-        const nextAlivePokemon = updatedDefender.team[nextAliveIndex];
-        nextPokemonName = nextAlivePokemon.name;
-
-        pokemonSwitchNotification = {
-          player: updatedDefender.nickname,
-          previousPokemon: damagedPokemon.name,
-          newPokemon: nextAlivePokemon.name,
-          newPokemonHp: nextAlivePokemon.hp,
-          newPokemonMaxHp: nextAlivePokemon.maxHp,
-        };
-
-        this.logger.info('Pokemon auto-switched after defeat', {
-          defender: updatedDefender.nickname,
-          defeated: damagedPokemon.name,
-          next: nextPokemonName,
-        });
+        // Don't auto-switch — let the defender choose their next Pokemon.
+        // Turn passes to the defender so they can send switch_pokemon.
+        this.logger.info(
+          'Pokemon defeated, waiting for defender to choose next',
+          {
+            defender: updatedDefender.nickname,
+            defeated: damagedPokemon.name,
+            remainingAlive: remainingAlivePokemon,
+          },
+        );
       }
     }
 
@@ -237,7 +232,13 @@ export class ExecuteAttack {
       defendingPlayer.playerId,
       updatedDefender,
     );
-    updatedLobby = advanceTurn(updatedLobby);
+
+    if (isDefeated && !battleEnded) {
+      // Defeated but has remaining: give turn to defender for forced switch
+      updatedLobby = assignTurnToPlayer(updatedLobby, defenderIndex);
+    } else {
+      updatedLobby = advanceTurn(updatedLobby);
+    }
 
     const finalLobby = await this.lobbyRepository.update(updatedLobby, session);
 
@@ -269,7 +270,6 @@ export class ExecuteAttack {
     isDefeated: boolean,
     nextPokemonName: string | null,
   ): NewBattleTurn {
-    const effectiveDamage = Math.max(1, rawDamage);
     return {
       attacker: {
         nickname: attackingPlayer.nickname,
@@ -283,7 +283,7 @@ export class ExecuteAttack {
         remainingHp: damagedPokemon.hp,
         maxHp: damagedPokemon.maxHp,
       },
-      damage: effectiveDamage,
+      damage: rawDamage,
       typeMultiplier,
       defeated: isDefeated,
       nextPokemon: nextPokemonName,
