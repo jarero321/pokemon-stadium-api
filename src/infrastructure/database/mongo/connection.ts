@@ -9,7 +9,10 @@ export async function connectToMongo(
     uri: uri.replace(/\/\/.*@/, '//<credentials>@'),
   });
 
-  const connection = await mongoose.connect(uri);
+  const connection = await mongoose.connect(uri, {
+    serverSelectionTimeoutMS: 10_000,
+    connectTimeoutMS: 10_000,
+  });
 
   logger.info('MongoDB connected', {
     host: connection.connection.host,
