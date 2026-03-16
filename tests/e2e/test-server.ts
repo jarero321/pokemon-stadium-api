@@ -25,7 +25,7 @@ import type { BattleFinishedEvent } from '@core/events/index';
 
 const TEST_MONGO_URI =
   process.env.MONGODB_URI ??
-  'mongodb://localhost:27018/pokemon-stadium-e2e?replicaSet=rs0';
+  'mongodb://localhost:27018/pokemon-stadium-e2e?replicaSet=rs0&directConnection=true';
 const TEST_JWT_SECRET =
   process.env.JWT_SECRET ?? 'e2e-test-secret-key-at-least-32-characters-long';
 
