@@ -21,9 +21,7 @@
 
 ## Hola! 👋
 
-Soy Carlos, y este proyecto es mi prueba tecnica para **Sr. Fullstack Developer**.
-
-Antes que nada, quiero ser transparente: use **AI Agents (Claude Code)** como herramienta de desarrollo. Esto no significa que le dije "hazme un proyecto" y me fui a dormir. Significa que pude iterar mas rapido, mantener una arquitectura limpia desde el dia uno, y llegar a un nivel de robustez que hubiera tomado el doble de tiempo sin asistencia. Los 159 tests, la arquitectura hexagonal, el sistema de WebSocket sin race conditions, todo esta pensado y supervisado por mi.
+Soy Carlos, y este es el backend de mi prueba tecnica para **Sr. Fullstack Developer**.
 
 ### Lo que pedia el spec
 
@@ -43,13 +41,9 @@ Tome esos requisitos y los lleve mas alla:
 
 ### Mi enfoque
 
-No busque entregar algo pixel-perfect. Busque construir un **sistema que escala sin dolor**. La clave fue Clean Architecture: entender el dominio primero, modelar las entidades y operaciones como funciones puras, y despues implementar la infraestructura. Esto nos dio tests de integracion y flujos E2E reales usando Docker para desarrollo local y AWS (ECS Fargate + ALB + Amplify) para produccion.
-
-Tambien agregamos **Storybook** en el frontend para trabajar UX/UI primero, refinar el producto, y documentar todo visualmente antes de integrar.
+No busque entregar algo pixel-perfect. Busque construir un **sistema que escala sin dolor**. La clave fue Clean Architecture: entender el dominio primero, modelar las entidades y operaciones como funciones puras, y despues implementar la infraestructura. Esto nos dio tests de integracion y flujos E2E reales usando Docker para desarrollo local y AWS (ECS Fargate + ALB) para produccion.
 
 Los commits son muchos, si. Pero usamos **atomic commits con GitFlow** para un historial 100% entendible. Funciones descriptivas, sin abstracciones innecesarias, codigo legible.
-
-Todo esto fue posible gracias a tener un servidor de Minecraft con mi hermano que tiene un mod de Pokemon, y MUCHO cafe para mantenerme vivo ☕
 
 **Contacto**: jareroluis@gmail.com | +52 476 150 9858
 
@@ -99,13 +93,10 @@ No es solo "que tecnologias use", sino **por que** cada una esta ahi.
 Cosas que no estaban en los requisitos pero que hacen la diferencia entre "cumple" y "funciona de verdad":
 
 - **Efectividad de tipos**: Matriz 15x15 con super efectivo (1.5x), no muy efectivo (0.5x), inmune (0x), y multiplicadores acumulados para tipos duales. No es solo ATK - DEF.
-- **Animaciones de entrada/salida**: En el frontend, pokeballs que se lanzan, sprites que aparecen con fade, animaciones de derrota con caida. La experiencia importa.
-- **Secuencias de victoria y derrota**: Confetti dorado con canvas-confetti (100 particulas, 2 oleadas), overlay con stats animados.
-- **Matchmaking sin cuentas**: Solo un nickname. Sin formularios de registro, sin passwords, sin verificacion de email. Entras, juegas, te vas.
-- **Storybook**: Cada componente de UI documentado visualmente con Playwright. Trabajamos UX/UI primero, refinamos el producto, y despues integramos.
+- **Matchmaking sin cuentas**: Solo un nickname. Sin formularios de registro, sin passwords. Entras, juegas, te vas.
 - **Forfeit automatico**: Si un jugador se desconecta durante batalla, el oponente gana. Porque esperar infinitamente no es una opcion.
 - **Leaderboard con historial**: Top jugadores por win rate, historial de batallas por nickname.
-- **Internacionalizacion**: Ingles y espanol con auto-deteccion.
+- **Cache SWR**: El catalogo de Pokemon se cachea 12h con revalidacion en background. No tiene sentido hacer 500 requests por los mismos datos.
 
 ---
 
@@ -134,8 +125,7 @@ WAITING → READY → BATTLING → FINISHED
 Dano = floor((Ataque_atacante - Defensa_defensor) x Multiplicador_tipo)
 ```
 
-- Si el resultado es menor a 1, el dano minimo es **1**
-- Si el tipo es **inmune** (0x), el dano es **0**
+- Si el resultado es menor a 1, el dano minimo es **1** (por spec)
 - El HP del defensor se actualiza: `HP_actual = HP_actual - Dano`
 - El HP **nunca baja de 0**
 
@@ -564,6 +554,16 @@ npx cdk deploy --all
 | Amplify Hosting (SSR)              | ~$0-5/mes (free tier)    |
 | Secrets Manager (3 secrets)        | ~$1.20/mes               |
 | **Total**                          | **~$26-31/mes**          |
+
+## Known Limitations / Future Improvements
+
+| Limitacion            | Contexto                                              | Mejora futura                                            |
+| :-------------------- | :---------------------------------------------------- | :------------------------------------------------------- |
+| Single lobby          | Por spec: "a single one that handles an unique match" | Multiplex con rooms de Socket.IO                         |
+| Mutex in-memory       | Funciona para single instance                         | Redis distributed lock para horizontal scaling           |
+| No horizontal scaling | Un solo Fargate task                                  | Auto-scaling group + Redis para state compartido         |
+| Sin cuenta de usuario | Solo nickname, sin password                           | OAuth / magic link si se requiere persistencia de sesion |
+| CORS abierto en dev   | `*` en desarrollo local                               | Restringido a dominio de Amplify en produccion           |
 
 ## Licencia
 
