@@ -68,6 +68,13 @@ export function registerBattleHandler(
         );
       }
 
+      // Emit lobby_status BEFORE battle_end — registry.clear() removes
+      // sockets from the room, so events after clear won't reach clients
+      io.to(registry.lobbyRoom).emit(
+        ServerEvent.LOBBY_STATUS,
+        mapLobbyToDTO(result.lobby),
+      );
+
       if (result.battleEnded) {
         io.to(registry.lobbyRoom).emit(ServerEvent.BATTLE_END, {
           winner: result.winner,
@@ -77,15 +84,9 @@ export function registerBattleHandler(
           battleId: result.lobby.battleId,
         });
 
-        // Clear registry so players can re-join for a new game
         registry.clear();
         handlerLogger.info('Battle ended', { winner: result.winner });
       }
-
-      io.to(registry.lobbyRoom).emit(
-        ServerEvent.LOBBY_STATUS,
-        mapLobbyToDTO(result.lobby),
-      );
     }),
   );
 
