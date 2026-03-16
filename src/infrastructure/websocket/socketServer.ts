@@ -17,6 +17,7 @@ import type {
   ILobbyRepository,
   ITokenService,
   IEventBus,
+  ITurnLock,
 } from '@core/interfaces/index';
 import { createBattleFinishedEvent } from '@core/events/index';
 
@@ -27,6 +28,7 @@ interface SocketServerDependencies {
   executeAttack: ExecuteAttack;
   switchPokemon: SwitchPokemon;
   lobbyRepository: ILobbyRepository;
+  lobbyLock: ITurnLock;
   eventBus: IEventBus;
   tokenService: ITokenService;
   logger: ILogger;
@@ -48,8 +50,14 @@ export function createSocketServer(
   });
 
   const registry = new PlayerConnectionRegistry();
-  const { logger, lobbyRepository, eventBus, tokenService, ...useCases } =
-    dependencies;
+  const {
+    logger,
+    lobbyRepository,
+    lobbyLock,
+    eventBus,
+    tokenService,
+    ...useCases
+  } = dependencies;
 
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
@@ -77,6 +85,7 @@ export function createSocketServer(
       joinLobby: useCases.joinLobby,
       assignPokemon: useCases.assignPokemon,
       playerReady: useCases.playerReady,
+      lobbyLock,
       registry,
       logger: connectionLogger,
     });

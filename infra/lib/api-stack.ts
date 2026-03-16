@@ -4,6 +4,8 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecs_patterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
@@ -39,7 +41,6 @@ export class ApiStack extends cdk.Stack {
     });
 
     // ── Fargate + ALB ────────────────────────────────────────
-    // fromAsset builds the Docker image and pushes to ECR automatically
     const service = new ecs_patterns.ApplicationLoadBalancedFargateService(
       this,
       'Service',
@@ -59,8 +60,7 @@ export class ApiStack extends cdk.Stack {
             NODE_ENV: 'production',
             POKEMON_API_BASE_URL:
               'https://pokemon-api-92034153384.us-central1.run.app',
-            CORS_ORIGIN:
-              'https://develop.d282vmmjhmj9t.amplifyapp.com,http://localhost:3000',
+            CORS_ORIGIN: '*', // CloudFront handles HTTPS, CORS must allow the CF domain
           },
           secrets: {
             MONGODB_URI: ecs.Secret.fromSecretsManager(mongoUri),
@@ -85,6 +85,25 @@ export class ApiStack extends cdk.Stack {
     // WebSocket: keep connections alive up to 1 hour
     service.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '3600');
 
+    // ── CloudFront (HTTPS → HTTP ALB) ──────────────────────
+    const distribution = new cloudfront.Distribution(this, 'ApiCdn', {
+      defaultBehavior: {
+        origin: new origins.HttpOrigin(
+          service.loadBalancer.loadBalancerDnsName,
+          {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+            httpPort: 80,
+          },
+        ),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy:
+          cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+      },
+      comment: 'Pokemon Stadium API — HTTPS termination',
+    });
+
     // ── GitHub OIDC (CI/CD without long-lived keys) ──────────
     const githubProvider = new iam.OpenIdConnectProvider(this, 'GithubOidc', {
       url: 'https://token.actions.githubusercontent.com',
@@ -107,7 +126,6 @@ export class ApiStack extends cdk.Stack {
       ),
     });
 
-    // CDK deploy needs broad permissions (CloudFormation, ECS, ECR, IAM, etc.)
     deployRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
     );
@@ -119,11 +137,16 @@ export class ApiStack extends cdk.Stack {
     );
 
     // ── Outputs ──────────────────────────────────────────────
-    this.apiUrl = `http://${service.loadBalancer.loadBalancerDnsName}`;
+    this.apiUrl = `https://${distribution.distributionDomainName}`;
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.apiUrl,
-      description: 'API endpoint (ALB)',
+      description: 'API endpoint (CloudFront HTTPS)',
+    });
+
+    new cdk.CfnOutput(this, 'ApiUrlHttp', {
+      value: `http://${service.loadBalancer.loadBalancerDnsName}`,
+      description: 'API endpoint (ALB HTTP — direct)',
     });
 
     new cdk.CfnOutput(this, 'DeployRoleArn', {

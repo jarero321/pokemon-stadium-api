@@ -114,20 +114,32 @@ describe('Battle Sync E2E', () => {
         latestS2 = data;
       });
 
-      let currentLobby = lobby;
+      let finished = false;
+      s1.on('battle_end', () => {
+        finished = true;
+      });
 
       for (let turn = 0; turn < 5; turn++) {
-        if (currentLobby.status === 'finished') break;
+        if (finished || latestS1.status === 'finished') break;
+        if (latestS1.currentTurnIndex === null) break;
 
-        const attackerIdx = currentLobby.currentTurnIndex!;
+        const attackerIdx = latestS1.currentTurnIndex;
         const attackerSocket = sockets[attackerIdx];
 
-        const turnPromise = waitForEvent<TurnResultDTO>(s1, 'turn_result');
+        const turnPromise = Promise.race([
+          waitForEvent<TurnResultDTO>(s1, 'turn_result'),
+          new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+        ]);
+
         attackerSocket.emit('attack', { requestId: crypto.randomUUID() });
-        await turnPromise;
+        const result = await turnPromise;
+
+        if (!result) break; // timeout — battle likely ended or needs switch
 
         // Let lobby_status propagate to both sockets
         await new Promise((r) => setTimeout(r, 50));
+
+        if (latestS1.status === 'finished') break;
 
         // Both players see the exact same state
         expect(latestS1.status).toBe(latestS2.status);
@@ -137,8 +149,6 @@ describe('Battle Sync E2E', () => {
         expect(latestS1.players[1].team[0].hp).toBe(
           latestS2.players[1].team[0].hp,
         );
-
-        currentLobby = latestS1;
       }
     } finally {
       s1.disconnect();

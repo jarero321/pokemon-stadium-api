@@ -126,6 +126,7 @@ async function bootstrap() {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    lobbyLock,
     eventBus,
     tokenService,
     logger,
