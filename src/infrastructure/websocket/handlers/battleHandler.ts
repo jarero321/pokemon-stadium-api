@@ -5,7 +5,7 @@ import type { SwitchPokemon } from '@application/use-cases/SwitchPokemon';
 import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
-import { mapLobbyToDTO } from '../mapLobbyToDTO';
+import { mapLobbyToDTO } from '@application/mappers/mapLobbyToDTO';
 import { attackSchema, switchPokemonSchema } from '../schemas';
 
 interface BattleHandlerDependencies {

@@ -6,7 +6,7 @@ import type { PlayerReady } from '@application/use-cases/PlayerReady';
 import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
-import { mapLobbyToDTO } from '../mapLobbyToDTO';
+import { mapLobbyToDTO } from '@application/mappers/mapLobbyToDTO';
 
 interface LobbyHandlerDependencies {
   io: Server;

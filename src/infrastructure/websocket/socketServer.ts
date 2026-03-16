@@ -11,7 +11,7 @@ import { PlayerConnectionRegistry } from './PlayerConnectionRegistry';
 import { registerLobbyHandler } from './handlers/lobbyHandler';
 import { registerBattleHandler } from './handlers/battleHandler';
 import { ServerEvent } from './SocketEvents';
-import { mapLobbyToDTO } from './mapLobbyToDTO';
+import { mapLobbyToDTO } from '@application/mappers/mapLobbyToDTO';
 import { LobbyStatus } from '@core/enums/index';
 import type {
   ILobbyRepository,
