@@ -82,12 +82,12 @@ describe('Core Operations', () => {
       expect(result.damage).toBeGreaterThanOrEqual(1);
     });
 
-    it('should return 0 damage for immune type matchups', () => {
+    it('should enforce minimum damage of 1 even for immune type matchups', () => {
       const attacker = makePokemon({ type: ['Normal'] });
       const defender = makePokemon({ type: ['Ghost'] });
 
       const result = calculateDamage(attacker, defender);
-      expect(result.damage).toBe(0);
+      expect(result.damage).toBeGreaterThanOrEqual(1);
       expect(result.typeMultiplier).toBe(0);
     });
 
@@ -133,11 +133,10 @@ describe('Core Operations', () => {
       expect(result.hp).toBe(0);
     });
 
-    it('should return unchanged pokemon for 0 damage (immune)', () => {
+    it('should still reduce HP for minimal damage', () => {
       const pokemon = makePokemon({ hp: 45 });
-      const result = applyDamage(pokemon, 0);
-      expect(result.hp).toBe(45);
-      expect(result).toBe(pokemon); // same reference
+      const result = applyDamage(pokemon, 1);
+      expect(result.hp).toBe(44);
     });
 
     it('should throw for already defeated pokemon', () => {

@@ -13,20 +13,16 @@ export interface DamageResult {
 /**
  * Calculate damage using the formula:
  *   baseDamage = max(1, attack - defense)
- *   finalDamage = floor(baseDamage * typeMultiplier)
+ *   finalDamage = max(1, floor(baseDamage * typeMultiplier))
  *
- * If type is IMMUNE (0x), damage is 0.
- * Otherwise, minimum damage is 1.
+ * Per spec: minimum damage is always 1 regardless of type matchup.
+ * Type multiplier is still reported for UI display purposes.
  */
 export function calculateDamage(
   attacker: Pokemon,
   defender: Pokemon,
 ): DamageResult {
   const typeMultiplier = getTypeMultiplier(attacker.type, defender.type);
-
-  if (typeMultiplier === 0) {
-    return { damage: 0, typeMultiplier };
-  }
 
   const baseDamage = Math.max(
     MINIMUM_DAMAGE,
@@ -47,7 +43,6 @@ export function calculateDamage(
  */
 export function applyDamage(pokemon: Pokemon, damage: number): Pokemon {
   if (pokemon.defeated) throw new PokemonAlreadyDefeatedError(pokemon.name);
-  if (damage === 0) return pokemon;
   const hp = Math.max(0, pokemon.hp - damage);
   return { ...pokemon, hp, defeated: hp === 0 };
 }
