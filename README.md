@@ -6,150 +6,257 @@
 ![License](https://img.shields.io/github/license/jarero321/pokemon-stadium-api?style=for-the-badge)
 ![Node](https://img.shields.io/badge/Node-22+-339933?style=for-the-badge&logo=node.js&logoColor=white)
 
-**Real-time Pokémon battle backend with REST API, WebSocket events, and Clean Architecture.**
+**Backend de batallas Pokémon en tiempo real con API REST, WebSocket y Clean Architecture.**
 
-[Getting Started](#getting-started) •
-[Architecture](#architecture) •
-[API Reference](#api-reference) •
-[WebSocket Events](#websocket-events) •
+[Inicio Rápido](#inicio-rápido) •
+[Reglas de Negocio](#reglas-de-negocio) •
+[Arquitectura](#arquitectura) •
+[API REST](#api-rest) •
+[Eventos WebSocket](#eventos-websocket) •
 [Testing](#testing)
 
 </div>
 
 ---
 
-## Features
+## Contexto del Proyecto
 
-| Feature                 | Description                                                                                      |
-| :---------------------- | :----------------------------------------------------------------------------------------------- |
-| **Real-time Battles**   | Turn-based combat via Socket.IO with type effectiveness, forced switches, and damage calculation |
-| **Clean Architecture**  | Domain → Application → Infrastructure with strict dependency rule enforcement                    |
-| **Lobby System**        | State machine (WAITING → READY → BATTLING → FINISHED) with disconnect recovery                   |
-| **Type Effectiveness**  | 15×15 type matchup matrix with super effective (1.5×), not effective (0.5×), and immune (0×)     |
-| **JWT Authentication**  | Token-based auth for both REST and WebSocket connections                                         |
-| **Idempotency**         | Request ID + MongoDB cache prevents duplicate attack processing                                  |
-| **Concurrency Control** | In-memory mutex lock prevents race conditions on simultaneous turns                              |
-| **Observability**       | Trace ID propagation across HTTP → WebSocket → DB with structured Pino logging                   |
-| **API Documentation**   | Auto-generated Swagger/OpenAPI at `/docs`                                                        |
+Prueba técnica **Sr. Fullstack Developer** — construir una aplicación fullstack que permita:
+
+1. Consultar un catálogo de Pokémon desde una API externa
+2. Seleccionar un equipo de 3 Pokémon aleatorios
+3. Ingresar a un lobby con un nickname
+4. Enfrentar una batalla en tiempo real contra otro jugador
+5. Determinar un ganador basado en reglas de combate
+
+### API Externa de Pokémon
+
+| Endpoint                                                       | Método | Respuesta                                                    |
+| :------------------------------------------------------------- | :----: | :----------------------------------------------------------- |
+| `https://pokemon-api-92034153384.us-central1.run.app/list`     |  GET   | `[{ id, name }]`                                             |
+| `https://pokemon-api-92034153384.us-central1.run.app/list/:id` |  GET   | `[{ id, name, type[], hp, attack, defense, speed, sprite }]` |
+
+---
+
+## Reglas de Negocio
+
+### Selección de Equipo
+
+- Cada jugador recibe **3 Pokémon aleatorios** del catálogo
+- **No se repiten** Pokémon entre jugadores
+- La asignación es aleatoria cada vez (Fisher-Yates shuffle)
+
+### Flujo de Batalla
+
+```
+WAITING → READY → BATTLING → FINISHED
+```
+
+- El lobby espera hasta que ambos jugadores estén marcados como **ready**
+- El primer turno se asigna al jugador cuyo Pokémon activo tenga mayor **Speed**
+- Los turnos son **estrictamente secuenciales** — solo un ataque a la vez
+- Los ataques se procesan **atómicamente** en el servidor antes de permitir el siguiente turno
+
+### Cálculo de Daño
+
+```
+Daño = floor((Ataque_atacante - Defensa_defensor) × Multiplicador_tipo)
+```
+
+- Si el resultado es menor a 1, el daño mínimo es **1**
+- Si el tipo es **inmune** (0×), el daño es **0**
+- El HP del defensor se actualiza: `HP_actual = HP_actual - Daño`
+- El HP **nunca baja de 0**
+
+### Efectividad de Tipos
+
+Matriz 15×15 de matchups con multiplicadores:
+
+| Relación        | Multiplicador |
+| :-------------- | :------------ |
+| Super efectivo  | 1.5×          |
+| No muy efectivo | 0.5×          |
+| Inmune          | 0×            |
+| Neutral         | 1×            |
+
+Los multiplicadores se **acumulan** para defensores de tipo dual.
+
+### Derrota y Victoria
+
+- Cuando el HP de un Pokémon llega a **0**, se considera derrotado
+- Si el defensor tiene Pokémon disponibles, el siguiente **entra automáticamente**
+- Si no quedan Pokémon, la batalla termina y se declara un **ganador**
+
+### Notificaciones Requeridas
+
+El sistema notifica a los jugadores cuando:
+
+- La batalla inicia
+- Se resuelve un turno (daño, HP restante, multiplicador)
+- Un Pokémon es derrotado
+- Un nuevo Pokémon entra en batalla
+- La batalla termina y se declara ganador
+
+### Estados del Lobby
+
+| Estado     | Descripción                                    |
+| :--------- | :--------------------------------------------- |
+| `waiting`  | 2 jugadores conectados, esperando confirmación |
+| `ready`    | Ambos jugadores confirmaron su equipo          |
+| `battling` | Batalla en curso                               |
+| `finished` | Hay un ganador, batalla terminada              |
+
+---
+
+## Características Implementadas
+
+| Característica              | Descripción                                                                   |
+| :-------------------------- | :---------------------------------------------------------------------------- |
+| **Batallas en Tiempo Real** | Combate por turnos via Socket.IO con efectividad de tipos y switches forzados |
+| **Clean Architecture**      | Dominio → Aplicación → Infraestructura con regla de dependencia estricta      |
+| **Sistema de Lobby**        | Máquina de estados con recuperación ante desconexión                          |
+| **Efectividad de Tipos**    | Matriz 15×15 con super efectivo, no efectivo, e inmune                        |
+| **Autenticación JWT**       | Token para REST y WebSocket con expiración de 24h                             |
+| **Idempotencia**            | Request ID + caché MongoDB previene ataques duplicados                        |
+| **Control de Concurrencia** | Mutex lock previene race conditions en turnos simultáneos                     |
+| **Observabilidad**          | Trace ID propagado HTTP → WebSocket → DB con Pino structured logging          |
+| **Documentación API**       | Swagger/OpenAPI auto-generado en `/docs`                                      |
+| **Caché SWR**               | Catálogo Pokémon cacheado 12h con revalidación en background                  |
+| **Rate Limiting**           | 100 req/min global, 30 req/min en registro                                    |
+| **Graceful Shutdown**       | Cierre limpio de conexiones HTTP, WebSocket y MongoDB                         |
+| **Forfeit por Desconexión** | Si un jugador se desconecta durante batalla, el oponente gana                 |
 
 ## Tech Stack
 
 <div align="center">
 
-**Languages & Frameworks**
+**Lenguajes y Frameworks**
 
 <img src="https://skillicons.dev/icons?i=ts,nodejs&perline=8" alt="languages" />
 
-**Infrastructure & Tools**
+**Infraestructura y Herramientas**
 
 <img src="https://skillicons.dev/icons?i=mongodb,docker,githubactions,pnpm&perline=8" alt="infra" />
 
 </div>
 
-| Technology               | Purpose                                                |
-| :----------------------- | :----------------------------------------------------- |
-| **Fastify 5**            | HTTP server with rate limiting and Swagger             |
-| **Socket.IO 4**          | Bidirectional real-time communication                  |
-| **MongoDB / Mongoose 9** | Persistence with transactions and TTL indexes          |
-| **Zod 4**                | Runtime validation for env vars and WebSocket payloads |
-| **Pino**                 | Structured JSON logging with trace ID correlation      |
-| **Vitest**               | Unit and E2E testing with in-memory fakes              |
+| Tecnología               | Propósito                                             |
+| :----------------------- | :---------------------------------------------------- |
+| **Fastify 5**            | Servidor HTTP con rate limiting y Swagger             |
+| **Socket.IO 4**          | Comunicación bidireccional en tiempo real             |
+| **MongoDB / Mongoose 9** | Persistencia con transacciones y TTL indexes          |
+| **Zod 4**                | Validación runtime de env vars y payloads WebSocket   |
+| **Pino**                 | Logging estructurado JSON con correlación de trace ID |
+| **JWT**                  | Autenticación stateless con jsonwebtoken              |
+| **Vitest**               | Testing unitario y E2E con fakes in-memory            |
+| **Husky + lint-staged**  | Pre-commit hooks (prettier + eslint)                  |
 
-## Getting Started
+## Inicio Rápido
 
-### Prerequisites
+### Prerequisitos
 
 - Node.js >= 22
 - pnpm
-- MongoDB 7 with replica set (for transactions)
+- MongoDB 7 con replica set (requerido para transacciones)
+- Docker (opcional, para setup rápido)
 
-### Quick Start with Docker
+### Con Docker (recomendado)
 
 ```bash
-# Start MongoDB + API
+# Levantar MongoDB + API
 docker compose up -d
 
-# API available at http://localhost:8080
-# Swagger docs at http://localhost:8080/docs
+# API disponible en http://localhost:8080
+# Swagger docs en http://localhost:8080/docs
 ```
 
-### Local Development
+### Desarrollo Local
 
 ```bash
-# 1. Clone and install
+# 1. Clonar e instalar
 git clone https://github.com/jarero321/pokemon-stadium-api.git
 cd pokemon-stadium-api
 pnpm install
 
-# 2. Start MongoDB with replica set
+# 2. Levantar MongoDB con replica set
 docker run -d --name pokemon-mongo -p 27017:27017 mongo:7 --replSet rs0
 docker exec pokemon-mongo mongosh --eval "rs.initiate({_id:'rs0', members:[{_id:0,host:'localhost:27017'}]})"
 
-# 3. Configure environment
+# 3. Configurar variables de entorno
 cp .env.example .env
 
-# 4. Start dev server
+# 4. Iniciar servidor de desarrollo
 pnpm dev
 ```
 
-The server starts at `http://0.0.0.0:8080`.
+El servidor inicia en `http://0.0.0.0:8080`.
 
-### Configuration
+### Variables de Entorno
 
-| Variable               | Description                                         | Default       |
+| Variable               | Descripción                                         | Default       |
 | :--------------------- | :-------------------------------------------------- | :------------ |
-| `PORT`                 | Server port                                         | `8080`        |
-| `HOST`                 | Bind address                                        | `0.0.0.0`     |
-| `MONGODB_URI`          | MongoDB connection string (requires replica set)    | _required_    |
-| `POKEMON_API_BASE_URL` | External Pokémon catalog API                        | _required_    |
-| `JWT_SECRET`           | JWT signing secret (min 32 chars)                   | _required_    |
-| `NODE_ENV`             | Environment (`development` / `production` / `test`) | `development` |
-| `CORS_ORIGIN`          | Allowed origins (`*` or comma-separated URLs)       | `*`           |
+| `PORT`                 | Puerto del servidor                                 | `8080`        |
+| `HOST`                 | Dirección de bind                                   | `0.0.0.0`     |
+| `MONGODB_URI`          | Cadena de conexión MongoDB (requiere replica set)   | _requerido_   |
+| `POKEMON_API_BASE_URL` | URL de la API externa de Pokémon                    | _requerido_   |
+| `JWT_SECRET`           | Secreto para firmar JWT (mínimo 32 caracteres)      | _requerido_   |
+| `NODE_ENV`             | Entorno (`development` / `production` / `test`)     | `development` |
+| `CORS_ORIGIN`          | Orígenes permitidos (`*` o URLs separadas por coma) | `*`           |
 
-## Architecture
+## Arquitectura
 
 ```
 src/
-├── core/                    # Domain — zero external dependencies
-│   ├── entities/            # Pokemon, Player, Battle, Lobby
-│   ├── operations/          # Pure functions: combat, lobby, player
-│   ├── interfaces/          # Ports: ILobbyRepository, ITurnLock, etc.
-│   ├── errors/              # Typed business errors (10 error types)
-│   ├── events/              # Domain events (BattleFinished)
-│   └── enums/               # LobbyStatus, PlayerStatus, PokemonType
-├── application/             # Use cases & orchestration
-│   ├── use-cases/           # RegisterPlayer, JoinLobby, ExecuteAttack...
-│   ├── mappers/             # Entity → DTO transformations
+├── core/                    # Dominio — cero dependencias externas
+│   ├── entities/            # Pokemon, Player, Battle, Lobby (interfaces inmutables)
+│   ├── operations/          # Funciones puras: combat, lobby, player
+│   ├── interfaces/          # Puertos: ILobbyRepository, ITurnLock, IEventBus...
+│   ├── errors/              # 10 errores de negocio tipados con HTTP status
+│   ├── events/              # Eventos de dominio (BattleFinished)
+│   ├── enums/               # LobbyStatus, PlayerStatus, PokemonType
+│   └── typeEffectiveness.ts # Matriz de efectividad de tipos 15×15
+├── application/             # Casos de uso y orquestación
+│   ├── use-cases/           # 9 use cases (RegisterPlayer, JoinLobby, ExecuteAttack...)
+│   ├── mappers/             # Transformaciones Entity → DTO
 │   ├── dtos/                # LobbyDTO, BattleDTO
-│   └── listeners/           # Event handlers (UpdateLeaderboard)
-├── infrastructure/          # Implementations
-│   ├── database/mongo/      # Mongoose schemas + repositories
-│   ├── http/                # Fastify server, routes, middlewares
-│   ├── websocket/           # Socket.IO handlers + player registry
-│   ├── external/            # Pokémon API client with SWR cache
-│   ├── auth/                # JWT token service
-│   ├── events/              # EventBus (EventEmitter wrapper)
+│   └── listeners/           # Handlers de eventos (UpdateLeaderboard)
+├── infrastructure/          # Implementaciones concretas
+│   ├── database/mongo/      # Schemas Mongoose + 3 repositorios + OperationRunner
+│   ├── http/                # Servidor Fastify, rutas REST, middlewares
+│   ├── websocket/           # Handlers Socket.IO + PlayerConnectionRegistry
+│   ├── external/            # Cliente API Pokémon con caché SWR
+│   ├── auth/                # Servicio JWT
+│   ├── events/              # EventBus (wrapper de EventEmitter)
 │   ├── locks/               # InMemoryTurnLock (mutex)
 │   └── logger/              # PinoLogger
-├── config/env.ts            # Zod-validated environment
-└── main.ts                  # Composition root (DI wiring)
+├── config/env.ts            # Validación de entorno con Zod
+└── main.ts                  # Composition root (inyección de dependencias)
 ```
 
-**Dependency rule**: `core ← application ← infrastructure`. Inner layers never import from outer layers.
+**Regla de dependencia**: `core ← application ← infrastructure`. Las capas internas **nunca** importan de capas externas.
 
-## API Reference
+### Decisiones Arquitectónicas
 
-### REST Endpoints
+| Decisión                           | Razón                                                                      |
+| :--------------------------------- | :------------------------------------------------------------------------- |
+| Socket.IO sobre WebSockets nativos | Reconexión automática, fallbacks, rooms, heartbeat                         |
+| REST para consultas stateless      | Cache-friendly, documentable con Swagger, no requiere conexión persistente |
+| Mongoose con validación estricta   | Defensa en profundidad — validación en schema además de en dominio         |
+| Trace ID propagado                 | Observabilidad end-to-end para debugging en producción                     |
+| Transacciones MongoDB              | Atomicidad en escrituras críticas (ataques, fin de batalla)                |
+| Idempotency keys con TTL           | Prevención de efectos duplicados por reintentos del cliente                |
 
-| Endpoint                         | Method | Auth | Description                   |
-| :------------------------------- | :----: | :--: | :---------------------------- |
-| `/api/players/register`          |  POST  |  —   | Register trainer, receive JWT |
-| `/api/pokemon`                   |  GET   |  —   | Pokémon catalog (cached 12h)  |
-| `/api/leaderboard`               |  GET   |  —   | Top players by win rate       |
-| `/api/players/:nickname/history` |  GET   | JWT  | Player battle history         |
-| `/api/health`                    |  GET   |  —   | Health check + MongoDB status |
+## API REST
 
-### Register Example
+| Endpoint                         | Método | Auth | Descripción                       |
+| :------------------------------- | :----: | :--: | :-------------------------------- |
+| `/api/players/register`          |  POST  |  —   | Registrar entrenador, recibir JWT |
+| `/api/pokemon`                   |  GET   |  —   | Catálogo Pokémon (caché 12h)      |
+| `/api/leaderboard`               |  GET   |  —   | Top jugadores por win rate        |
+| `/api/players/:nickname/history` |  GET   | JWT  | Historial de batallas del jugador |
+| `/api/health`                    |  GET   |  —   | Health check + estado de MongoDB  |
+
+### Ejemplo de Registro
 
 ```bash
 curl -X POST http://localhost:8080/api/players/register \
@@ -164,49 +271,65 @@ curl -X POST http://localhost:8080/api/players/register \
     "player": { "nickname": "Ash", "wins": 0, "losses": 0, "winRate": 0 },
     "isNewPlayer": true,
     "token": "eyJhbGciOiJIUzI1NiIs..."
-  }
+  },
+  "traceId": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-03-15T10:30:00.000Z"
 }
 ```
 
-## WebSocket Events
+### Formato de Respuesta Estándar
 
-Connect with `socket.io-client` using the JWT token:
+Todas las respuestas siguen el formato:
+
+```json
+{
+  "success": true | false,
+  "data": { ... } | null,
+  "error": { "code": "ERROR_CODE", "message": "..." } | null,
+  "traceId": "uuid",
+  "timestamp": "ISO 8601"
+}
+```
+
+## Eventos WebSocket
+
+Conexión con `socket.io-client` usando el JWT:
 
 ```typescript
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:8080', {
   transports: ['websocket'],
-  auth: { token: 'your-jwt-token' },
+  auth: { token: 'tu-jwt-token' },
 });
 ```
 
-### Client → Server
+### Cliente → Servidor
 
-| Event            | Payload                                        | Description                |
-| :--------------- | :--------------------------------------------- | :------------------------- |
-| `join_lobby`     | —                                              | Join or create lobby       |
-| `assign_pokemon` | —                                              | Request 3 random Pokémon   |
-| `ready`          | —                                              | Confirm team, mark ready   |
-| `attack`         | `{ requestId: UUID }`                          | Attack with active Pokémon |
-| `switch_pokemon` | `{ requestId: UUID, targetPokemonIndex: 0-2 }` | Switch active Pokémon      |
+| Evento           | Payload                                        | Descripción                    |
+| :--------------- | :--------------------------------------------- | :----------------------------- |
+| `join_lobby`     | —                                              | Unirse o crear lobby           |
+| `assign_pokemon` | —                                              | Solicitar 3 Pokémon aleatorios |
+| `ready`          | —                                              | Confirmar equipo, marcar listo |
+| `attack`         | `{ requestId: UUID }`                          | Atacar con Pokémon activo      |
+| `switch_pokemon` | `{ requestId: UUID, targetPokemonIndex: 0-2 }` | Cambiar Pokémon activo         |
 
-### Server → Client
+### Servidor → Cliente
 
-| Event              | Description                               |
-| :----------------- | :---------------------------------------- |
-| `lobby_status`     | Full lobby state sync                     |
-| `battle_start`     | Battle begins (both players ready)        |
-| `turn_result`      | Damage dealt, HP updated, type multiplier |
-| `pokemon_defeated` | A Pokémon fainted                         |
-| `pokemon_switch`   | A Pokémon entered battle                  |
-| `battle_end`       | Winner declared                           |
-| `error`            | Error with code and message               |
+| Evento             | Descripción                                              |
+| :----------------- | :------------------------------------------------------- |
+| `lobby_status`     | Sincronización completa del estado del lobby             |
+| `battle_start`     | La batalla inicia (ambos jugadores listos)               |
+| `turn_result`      | Resultado del turno: daño, HP actualizado, multiplicador |
+| `pokemon_defeated` | Un Pokémon fue derrotado                                 |
+| `pokemon_switch`   | Un Pokémon entró en batalla                              |
+| `battle_end`       | Ganador declarado                                        |
+| `error`            | Error con código y mensaje                               |
 
-### Battle Flow
+### Flujo de Batalla
 
 ```
-Player 1                    Server                    Player 2
+Jugador 1                   Servidor                  Jugador 2
    │                          │                          │
    ├─ join_lobby ────────────►│◄──────────── join_lobby ─┤
    │◄─ lobby_status ─────────│──────── lobby_status ───►│
@@ -224,38 +347,65 @@ Player 1                    Server                    Player 2
    │◄─ battle_end ───────────│──────── battle_end ─────►│
 ```
 
+## Persistencia
+
+Todos los datos de batalla se persisten en MongoDB:
+
+| Colección        | Datos                                                                 |
+| :--------------- | :-------------------------------------------------------------------- |
+| **PlayerStats**  | nickname, wins, losses, totalBattles, winRate, battleHistory          |
+| **Lobby**        | status, players[], currentTurnIndex, battleId, winner, timestamps     |
+| **Battle**       | players[], turns[] (audit trail completo), winner, status, timestamps |
+| **PokemonCache** | Catálogo cacheado con TTL de 24h                                      |
+| **Idempotency**  | Resultados de operaciones cacheados con TTL de 1h                     |
+
 ## Testing
 
 ```bash
-# Unit tests (57 tests)
+# Tests unitarios (57 tests — dominio + casos de uso)
 pnpm test
 
-# E2E tests (102 tests — requires Docker)
+# Tests E2E (102 tests — requiere Docker)
 pnpm test:e2e
 
 # Type checking
 pnpm typecheck
 
-# Lint
-pnpm lint
+# Lint + format
+pnpm lint && pnpm format
 ```
 
-### Test Coverage
+### Cobertura de Tests
 
-| Suite             | Tests | Scope                                                   |
-| :---------------- | ----: | :------------------------------------------------------ |
-| Core Operations   |    24 | Damage calc, type effectiveness, lobby/player ops       |
-| Battle Flow       |    25 | Full lifecycle with fakes: join → attack → switch → win |
-| Register Player   |     8 | Validation, idempotency, edge cases                     |
-| Auth E2E          |    14 | JWT flow, protected routes, WebSocket auth              |
-| Game Flow E2E     |    26 | REST endpoints, full game lifecycle                     |
-| Battle Sync E2E   |    27 | Turn sync, forced switch, reconnection, forfeit         |
-| Disconnection E2E |    22 | Lobby/battle disconnect, reconnection, rapid cycling    |
-| Idempotency E2E   |     9 | Duplicate request handling                              |
-| Rate Limit E2E    |     4 | Endpoint throttling                                     |
+| Suite             | Tests | Alcance                                                         |
+| :---------------- | ----: | :-------------------------------------------------------------- |
+| Core Operations   |    24 | Cálculo de daño, efectividad de tipos, operaciones lobby/player |
+| Battle Flow       |    25 | Ciclo completo con fakes: join → attack → switch → win          |
+| Register Player   |     8 | Validación, idempotencia, edge cases                            |
+| Auth E2E          |    14 | Flujo JWT, rutas protegidas, auth WebSocket                     |
+| Game Flow E2E     |    26 | Endpoints REST, ciclo de vida completo                          |
+| Battle Sync E2E   |    27 | Sincronización de turnos, switch forzado, reconexión, forfeit   |
+| Disconnection E2E |    22 | Desconexión en lobby/batalla, reconexión, ciclos rápidos        |
+| Idempotency E2E   |     9 | Manejo de requests duplicados                                   |
+| Rate Limit E2E    |     4 | Throttling de endpoints                                         |
 
-## License
+**Total: 159 tests** (57 unitarios + 102 E2E)
 
-This project is licensed under the MIT License.
+## Scripts
+
+| Comando          | Descripción                                         |
+| :--------------- | :-------------------------------------------------- |
+| `pnpm dev`       | Servidor de desarrollo con hot reload               |
+| `pnpm build`     | Build de producción (TypeScript + alias resolution) |
+| `pnpm start`     | Iniciar servidor de producción                      |
+| `pnpm test`      | Ejecutar tests unitarios                            |
+| `pnpm test:e2e`  | Ejecutar tests E2E (Docker)                         |
+| `pnpm typecheck` | Verificación de tipos TypeScript                    |
+| `pnpm lint`      | ESLint                                              |
+| `pnpm format`    | Prettier                                            |
+
+## Licencia
+
+Este proyecto está licenciado bajo la Licencia MIT.
 
 <img width="100%" src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=0,2,5,30&height=120&section=footer" />
