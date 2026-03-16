@@ -114,18 +114,13 @@ export function registerLobbyHandler(
         return;
       }
 
-      const { lobby, battleStarted, readyLobby } = await playerReady.execute(
+      const { lobby, battleStarted } = await playerReady.execute(
         socket.id,
         crypto.randomUUID(),
       );
 
-      if (readyLobby) {
-        io.to(registry.lobbyRoom).emit(
-          ServerEvent.LOBBY_STATUS,
-          mapLobbyToDTO(readyLobby),
-        );
-      }
-
+      // Single lobby_status with the final state (WAITING or BATTLING)
+      // The intermediate READY state is transient and not useful to clients
       io.to(registry.lobbyRoom).emit(
         ServerEvent.LOBBY_STATUS,
         mapLobbyToDTO(lobby),
