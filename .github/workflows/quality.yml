@@ -39,8 +39,14 @@ jobs:
         run: docker compose -f docker-compose.e2e.yml up -d --wait
 
       - name: Run E2E tests
+        env:
+          MONGODB_URI: mongodb://localhost:27018/pokemon-stadium-test?replicaSet=rs0
+          POKEMON_API_BASE_URL: https://pokemon-api-92034153384.us-central1.run.app
+          JWT_SECRET: ci-test-secret-key-at-least-32-characters-long
+          NODE_ENV: test
+          PORT: 0
         run: pnpm test:e2e
 
       - name: Stop MongoDB
         if: always()
-        run: docker compose -f docker-compose.e2e.yml down
+        run: docker compose -f docker-compose.e2e.yml down -v
