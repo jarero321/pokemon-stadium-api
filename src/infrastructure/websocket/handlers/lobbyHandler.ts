@@ -65,10 +65,10 @@ export function registerLobbyHandler(
         return;
       }
 
-      // Clean stale lobbies: if existing lobby has players whose sockets
-      // are no longer connected, finish that lobby so a fresh one is created
+      // Clean stale lobbies: if ANY active lobby has players whose sockets
+      // are no longer connected, finish it so a fresh one can be created
       const staleLobby = await dependencies.lobbyRepository.findActive();
-      if (staleLobby && staleLobby.status === LobbyStatus.WAITING) {
+      if (staleLobby) {
         const hasDisconnectedPlayers = staleLobby.players.some(
           (p) => !registry.isNicknameConnected(p.nickname),
         );
@@ -80,6 +80,7 @@ export function registerLobbyHandler(
           });
           handlerLogger.info('Cleaned stale lobby with disconnected players', {
             lobbyId: staleLobby._id,
+            status: staleLobby.status,
             stalePlayers: staleLobby.players.map((p) => p.nickname),
           });
         }
