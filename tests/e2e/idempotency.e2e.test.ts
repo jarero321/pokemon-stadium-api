@@ -78,9 +78,13 @@ describe('Idempotency E2E', () => {
     s1.emit('ready');
     await waitForEvent(s1, 'lobby_status');
 
-    const battlePromise = waitForEvent<LobbyDTO>(s1, 'battle_start');
+    const battleP1 = waitForEvent<LobbyDTO>(s1, 'battle_start');
+    const battleP2 = waitForEvent<LobbyDTO>(s2, 'battle_start');
     s2.emit('ready');
-    const lobby = await battlePromise;
+    const [lobby] = await Promise.all([battleP1, battleP2]);
+
+    // Drain pending lobby_status from ready→battling transition
+    await new Promise((r) => setTimeout(r, 50));
 
     return { sockets: [s1, s2], lobby };
   }

@@ -157,15 +157,16 @@ describe('Game Flow E2E', () => {
         socket1.emit('ready');
         await readyPromise1;
 
-        const battleStartPromise = waitForEvent<LobbyDTO>(
-          socket1,
-          'battle_start',
-        );
+        const battleStartP1 = waitForEvent<LobbyDTO>(socket1, 'battle_start');
+        const battleStartP2 = waitForEvent<LobbyDTO>(socket2, 'battle_start');
         socket2.emit('ready');
-        const battleLobby = await battleStartPromise;
+        const [battleLobby] = await Promise.all([battleStartP1, battleStartP2]);
 
         expect(battleLobby.status).toBe('battling');
         expect(battleLobby.currentTurnIndex).not.toBeNull();
+
+        // Drain any pending lobby_status from ready→battling transition
+        await new Promise((r) => setTimeout(r, 50));
 
         // 7. Battle until someone wins
         const sockets = [socket1, socket2];
