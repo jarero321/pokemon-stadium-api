@@ -86,6 +86,7 @@ export function createSocketServer(
       assignPokemon: useCases.assignPokemon,
       playerReady: useCases.playerReady,
       lobbyLock,
+      lobbyRepository,
       registry,
       logger: connectionLogger,
     });
