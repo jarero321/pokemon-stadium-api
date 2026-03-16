@@ -404,6 +404,96 @@ pnpm lint && pnpm format
 | `pnpm lint`      | ESLint                                              |
 | `pnpm format`    | Prettier                                            |
 
+## Deployment (AWS)
+
+La infraestructura se define como código con **AWS CDK** en `/infra`. Un solo `cdk deploy --all` levanta ambos stacks.
+
+### Arquitectura Cloud
+
+```
+                    ┌─────────────────────────┐
+                    │     AWS Amplify          │
+                    │  (Next.js SSR Frontend)  │
+                    │  Auto-deploy from main   │
+                    └───────────┬──────────────┘
+                                │ NEXT_PUBLIC_API_URL
+                                ▼
+┌───────────────────────────────────────────────────┐
+│                    ALB (public)                    │
+│              idle_timeout: 3600s (WS)             │
+│              health: /api/health                   │
+└───────────────────────┬───────────────────────────┘
+                        │
+┌───────────────────────▼───────────────────────────┐
+│               ECS Fargate Service                  │
+│          cpu: 256  |  memory: 512 MiB              │
+│          image: ECR (Docker from repo)             │
+│          port: 8080                                │
+│                                                    │
+│   env:                                             │
+│     MONGODB_URI     ← Secrets Manager              │
+│     JWT_SECRET      ← Secrets Manager (auto-gen)   │
+│     POKEMON_API_URL ← hardcoded                    │
+│     CORS_ORIGIN     ← configurable                 │
+└────────────────────────────────────────────────────┘
+                        │
+                  MongoDB Atlas
+              (connection string en
+               Secrets Manager)
+```
+
+### Stacks
+
+| Stack                    | Recursos                                                                  | Descripción             |
+| :----------------------- | :------------------------------------------------------------------------ | :---------------------- |
+| `PokemonStadiumApi`      | VPC, ECS Cluster, Fargate Service, ALB, Secrets Manager, GitHub OIDC Role | Backend API + WebSocket |
+| `PokemonStadiumFrontend` | Amplify App, Branch (main, auto-build)                                    | Frontend Next.js SSR    |
+
+### Deployment desde cero
+
+```bash
+# 1. Configurar contexto (owner de GitHub)
+cd infra
+sed -i 's/GITHUB_OWNER/tu-usuario-github/' cdk.json
+
+# 2. Crear secreto de MongoDB Atlas (una sola vez)
+aws secretsmanager create-secret \
+  --name pokemon-stadium/mongodb-uri \
+  --secret-string "mongodb+srv://user:pass@cluster.mongodb.net/pokemon-stadium"
+
+# 3. Crear GitHub PAT para Amplify (una sola vez)
+aws secretsmanager create-secret \
+  --name pokemon-stadium/github-token \
+  --secret-string "ghp_xxxxxxxxxxxx"
+
+# 4. Instalar dependencias CDK
+npm ci
+
+# 5. Deploy (primera vez necesita bootstrap)
+npx cdk bootstrap
+npx cdk deploy --all
+```
+
+### CI/CD
+
+| Trigger                  | Pipeline               | Acciones                               |
+| :----------------------- | :--------------------- | :------------------------------------- |
+| Push a `develop` (API)   | GitHub Actions CI      | Typecheck, Lint, Unit Tests, E2E Tests |
+| Push a `main` (API)      | GitHub Actions Deploy  | CDK diff + deploy a ECS Fargate        |
+| Push a `main` (Frontend) | AWS Amplify Auto-build | Build Next.js + deploy SSR             |
+
+**GitHub OIDC**: El deploy usa `AssumeRoleWithWebIdentity` — sin access keys de larga duración. El rol `pokemon-stadium-deploy` se crea automáticamente por CDK.
+
+### Costos estimados
+
+| Recurso                            | Costo aprox. (us-east-1) |
+| :--------------------------------- | :----------------------- |
+| Fargate (256 CPU, 512 MiB, 1 task) | ~$9/mes                  |
+| ALB                                | ~$16/mes                 |
+| Amplify Hosting (SSR)              | ~$0-5/mes (free tier)    |
+| Secrets Manager (3 secrets)        | ~$1.20/mes               |
+| **Total**                          | **~$26-31/mes**          |
+
 ## Licencia
 
 Este proyecto está licenciado bajo la Licencia MIT.
