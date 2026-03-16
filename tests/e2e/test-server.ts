@@ -37,6 +37,7 @@ export interface TestServer {
 export async function createTestServer(): Promise<TestServer> {
   const logger = new SilentLogger();
 
+  console.log(`[E2E] Connecting to MongoDB: ${TEST_MONGO_URI}`);
   await connectToMongo(TEST_MONGO_URI, logger);
 
   const lobbyRepository = new MongoLobbyRepository();
