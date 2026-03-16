@@ -86,12 +86,18 @@ describe('Battle Flow - Full game lifecycle', () => {
       );
     });
 
-    it('should allow same nickname to reconnect with new playerId', async () => {
+    it('should return lobby when same playerId rejoins', async () => {
       await joinLobby.execute('Ash', 'player-1');
-      const lobby = await joinLobby.execute('Ash', 'player-2');
+      const lobby = await joinLobby.execute('Ash', 'player-1');
 
       expect(lobby.players).toHaveLength(1);
-      expect(lobby.players[0].playerId).toBe('player-2');
+      expect(lobby.players[0].playerId).toBe('player-1');
+    });
+
+    it('should reject same nickname with different playerId', async () => {
+      await joinLobby.execute('Ash', 'player-1');
+
+      await expect(joinLobby.execute('Ash', 'player-2')).rejects.toThrowError();
     });
   });
 
