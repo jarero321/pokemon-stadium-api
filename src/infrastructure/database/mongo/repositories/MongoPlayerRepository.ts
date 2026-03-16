@@ -39,7 +39,7 @@ export class MongoPlayerRepository implements IPlayerRepository {
     const doc = await PlayerModel.findOneAndUpdate(
       { nickname: player.nickname },
       player,
-      { upsert: true, new: true, lean: true },
+      { upsert: true, returnDocument: 'after', lean: true },
     );
 
     if (!doc) throw new Error(`Failed to upsert player ${player.nickname}`);
@@ -57,7 +57,7 @@ export class MongoPlayerRepository implements IPlayerRepository {
         $inc: { wins: 1, totalBattles: 1 },
         $push: { battleHistory: battleId },
       },
-      { upsert: true, new: true, session: toSession(session) },
+      { upsert: true, returnDocument: 'after', session: toSession(session) },
     );
 
     doc.winRate = doc.totalBattles > 0 ? doc.wins / doc.totalBattles : 0;
@@ -75,7 +75,7 @@ export class MongoPlayerRepository implements IPlayerRepository {
         $inc: { losses: 1, totalBattles: 1 },
         $push: { battleHistory: battleId },
       },
-      { upsert: true, new: true, session: toSession(session) },
+      { upsert: true, returnDocument: 'after', session: toSession(session) },
     );
 
     doc.winRate = doc.totalBattles > 0 ? doc.wins / doc.totalBattles : 0;

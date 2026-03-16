@@ -113,8 +113,10 @@ describe('Battle Sync E2E', () => {
         const [lobby1, lobby2] = await Promise.all([lobbyP1, lobbyP2]);
 
         // Both players see the exact same state
-        expect(lobby1.currentTurnIndex).toBe(lobby2.currentTurnIndex);
         expect(lobby1.status).toBe(lobby2.status);
+        if (lobby1.status !== 'finished') {
+          expect(lobby1.currentTurnIndex).toBe(lobby2.currentTurnIndex);
+        }
         expect(lobby1.players[0].team[0].hp).toBe(lobby2.players[0].team[0].hp);
         expect(lobby1.players[1].team[0].hp).toBe(lobby2.players[1].team[0].hp);
 

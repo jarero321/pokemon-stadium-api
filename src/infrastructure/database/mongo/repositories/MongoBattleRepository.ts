@@ -86,7 +86,7 @@ export class MongoBattleRepository implements IBattleRepository {
     const doc = await BattleModel.findByIdAndUpdate(
       battleId,
       { winner, status: BattleStatus.FINISHED, finishedAt: new Date() },
-      { new: true, lean: true, session: toSession(session) },
+      { returnDocument: 'after', lean: true, session: toSession(session) },
     );
 
     if (!doc) throw new Error(`Battle ${battleId} not found`);

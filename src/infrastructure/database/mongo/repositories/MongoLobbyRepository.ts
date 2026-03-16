@@ -59,7 +59,7 @@ export class MongoLobbyRepository implements ILobbyRepository {
         battleId: lobby.battleId,
         winner: lobby.winner,
       },
-      { new: true, lean: true, session: toSession(session) },
+      { returnDocument: 'after', lean: true, session: toSession(session) },
     );
 
     if (!doc) throw new Error(`Lobby ${lobby._id} not found`);
