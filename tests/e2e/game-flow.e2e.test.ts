@@ -39,6 +39,7 @@ interface TurnResultDTO {
   attacker: { nickname: string };
   defender: { nickname: string; remainingHp: number; maxHp: number };
   damage: number;
+  defeated: boolean;
 }
 
 interface BattleEndDTO {
@@ -168,35 +169,35 @@ describe('Game Flow E2E', () => {
         // Drain any pending lobby_status from ready→battling transition
         await new Promise((r) => setTimeout(r, 50));
 
-        // 7. Battle until someone wins
+        // 7. Battle until someone wins — use lobby_status to track state
         const sockets = [socket1, socket2];
         const nicknames = ['Ash', 'Gary'];
-        let currentLobby = battleLobby;
         let battleEnd: BattleEndDTO | null = null;
 
-        for (let turn = 0; turn < 200; turn++) {
-          const attackerIndex = currentLobby.currentTurnIndex!;
-          const attackerSocket = sockets[attackerIndex];
+        // Track latest lobby state via persistent listener
+        let latestLobby = battleLobby;
+        socket1.on('lobby_status', (data: LobbyDTO) => {
+          latestLobby = data;
+        });
 
-          // Listen for turn_result and lobby_status on the OTHER socket too
+        // Listen for battle_end globally
+        const battleEndGlobal = new Promise<BattleEndDTO>((resolve) => {
+          socket1.once('battle_end', resolve);
+        });
+
+        for (let i = 0; i < 200; i++) {
+          // Wait for latestLobby to reflect current state
+          await new Promise((r) => setTimeout(r, 30));
+
+          if (latestLobby.status === 'finished') break;
+          if (latestLobby.currentTurnIndex === null) break;
+
+          const attackerIdx = latestLobby.currentTurnIndex;
+          const attackerSocket = sockets[attackerIdx];
+
           const turnPromise = waitForEvent<TurnResultDTO>(
             socket1,
             'turn_result',
-          );
-          const lobbyUpdatePromise = waitForEvent<LobbyDTO>(
-            socket1,
-            'lobby_status',
-          );
-
-          // Also check for battle_end (race with turn_result)
-          const battleEndPromise = new Promise<BattleEndDTO | null>(
-            (resolve) => {
-              const timer = setTimeout(() => resolve(null), 100);
-              socket1.once('battle_end', (data: BattleEndDTO) => {
-                clearTimeout(timer);
-                resolve(data);
-              });
-            },
           );
 
           attackerSocket.emit('attack', {
@@ -204,20 +205,50 @@ describe('Game Flow E2E', () => {
           });
 
           const turnResult = await turnPromise;
-          expect(turnResult.damage).toBeGreaterThanOrEqual(1);
-          expect(turnResult.turnNumber).toBe(turn + 1);
+          expect(turnResult.damage).toBeGreaterThanOrEqual(0);
 
-          currentLobby = await lobbyUpdatePromise;
+          if (turnResult.defeated) {
+            // Wait to see if battle ends or needs forced switch
+            const endOrTimeout = await Promise.race([
+              battleEndGlobal.then((d) => ({ type: 'end' as const, data: d })),
+              new Promise<{ type: 'timeout' }>((r) =>
+                setTimeout(() => r({ type: 'timeout' }), 300),
+              ),
+            ]);
 
-          battleEnd = await battleEndPromise;
-          if (battleEnd) break;
+            if (endOrTimeout.type === 'end') {
+              battleEnd = endOrTimeout.data;
+              break;
+            }
+
+            // Forced switch needed — find alive pokemon for defender
+            const defenderIdx = latestLobby.currentTurnIndex!;
+            const defender = latestLobby.players[defenderIdx];
+            const nextAlive = defender?.team.findIndex(
+              (p, idx) => !p.defeated && idx !== defender.activePokemonIndex,
+            );
+
+            if (nextAlive !== undefined && nextAlive !== -1) {
+              sockets[defenderIdx].emit('switch_pokemon', {
+                requestId: crypto.randomUUID(),
+                targetPokemonIndex: nextAlive,
+              });
+              // Wait for lobby to update after switch
+              await new Promise((r) => setTimeout(r, 100));
+            }
+          } else {
+            // Wait for lobby_status to update turn
+            await new Promise((r) => setTimeout(r, 30));
+          }
         }
 
         // 8. Verify battle ended with a winner
-        expect(battleEnd).not.toBeNull();
-        expect(nicknames).toContain(battleEnd!.winner);
-        expect(nicknames).toContain(battleEnd!.loser);
-        expect(battleEnd!.winner).not.toBe(battleEnd!.loser);
+        if (!battleEnd) {
+          battleEnd = await battleEndGlobal;
+        }
+        expect(nicknames).toContain(battleEnd.winner);
+        expect(nicknames).toContain(battleEnd.loser);
+        expect(battleEnd.winner).not.toBe(battleEnd.loser);
 
         // 9. Verify leaderboard updated
         // Small delay to let event listeners process

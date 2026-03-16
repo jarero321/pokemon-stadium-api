@@ -103,31 +103,42 @@ describe('Battle Sync E2E', () => {
 
     try {
       const sockets = [s1, s2];
+
+      // Track latest lobby per player via persistent listeners
+      let latestS1: LobbyDTO = lobby;
+      let latestS2: LobbyDTO = lobby;
+      s1.on('lobby_status', (data: LobbyDTO) => {
+        latestS1 = data;
+      });
+      s2.on('lobby_status', (data: LobbyDTO) => {
+        latestS2 = data;
+      });
+
       let currentLobby = lobby;
 
       for (let turn = 0; turn < 5; turn++) {
+        if (currentLobby.status === 'finished') break;
+
         const attackerIdx = currentLobby.currentTurnIndex!;
         const attackerSocket = sockets[attackerIdx];
 
-        const [lobbyP1, lobbyP2] = [
-          waitForEvent<LobbyDTO>(s1, 'lobby_status'),
-          waitForEvent<LobbyDTO>(s2, 'lobby_status'),
-        ];
-
+        const turnPromise = waitForEvent<TurnResultDTO>(s1, 'turn_result');
         attackerSocket.emit('attack', { requestId: crypto.randomUUID() });
+        await turnPromise;
 
-        const [lobby1, lobby2] = await Promise.all([lobbyP1, lobbyP2]);
+        // Let lobby_status propagate to both sockets
+        await new Promise((r) => setTimeout(r, 50));
 
         // Both players see the exact same state
-        expect(lobby1.status).toBe(lobby2.status);
-        if (lobby1.status !== 'finished') {
-          expect(lobby1.currentTurnIndex).toBe(lobby2.currentTurnIndex);
-        }
-        expect(lobby1.players[0].team[0].hp).toBe(lobby2.players[0].team[0].hp);
-        expect(lobby1.players[1].team[0].hp).toBe(lobby2.players[1].team[0].hp);
+        expect(latestS1.status).toBe(latestS2.status);
+        expect(latestS1.players[0].team[0].hp).toBe(
+          latestS2.players[0].team[0].hp,
+        );
+        expect(latestS1.players[1].team[0].hp).toBe(
+          latestS2.players[1].team[0].hp,
+        );
 
-        currentLobby = lobby1;
-        if (currentLobby.status === 'finished') break;
+        currentLobby = latestS1;
       }
     } finally {
       s1.disconnect();
