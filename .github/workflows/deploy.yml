@@ -37,6 +37,24 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
+      - name: CDK Diff (preview changes)
+        working-directory: infra
+        run: npx cdk diff --all 2>&1 || true
+
       - name: CDK Deploy
         working-directory: infra
-        run: npx cdk deploy --all --require-approval never
+        run: npx cdk deploy --all --require-approval never --outputs-file cdk-outputs.json
+
+      - name: Show deployment outputs
+        working-directory: infra
+        run: cat cdk-outputs.json
+
+      - name: Verify API health
+        run: |
+          API_URL=$(cat infra/cdk-outputs.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('PokemonStadiumApi',{}).get('ApiUrl',''))")
+          if [ -n "$API_URL" ]; then
+            echo "Checking $API_URL/api/health..."
+            curl -sf "$API_URL/api/health" | python3 -m json.tool
+          else
+            echo "No API URL found in outputs"
+          fi
