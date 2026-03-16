@@ -3,6 +3,7 @@ import type { ILogger } from '@core/interfaces/index';
 import type { JoinLobby } from '@application/use-cases/JoinLobby';
 import type { AssignPokemon } from '@application/use-cases/AssignPokemon';
 import type { PlayerReady } from '@application/use-cases/PlayerReady';
+import type { ITurnLock } from '@core/interfaces/index';
 import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
@@ -13,6 +14,7 @@ interface LobbyHandlerDependencies {
   joinLobby: JoinLobby;
   assignPokemon: AssignPokemon;
   playerReady: PlayerReady;
+  lobbyLock: ITurnLock;
   registry: PlayerConnectionRegistry;
   logger: ILogger;
 }
@@ -21,8 +23,15 @@ export function registerLobbyHandler(
   socket: Socket,
   dependencies: LobbyHandlerDependencies,
 ): void {
-  const { io, joinLobby, assignPokemon, playerReady, registry, logger } =
-    dependencies;
+  const {
+    io,
+    joinLobby,
+    assignPokemon,
+    playerReady,
+    lobbyLock,
+    registry,
+    logger,
+  } = dependencies;
 
   const handlerLogger = logger.child({ socketId: socket.id });
 
@@ -77,14 +86,20 @@ export function registerLobbyHandler(
         return;
       }
 
-      const lobby = await assignPokemon.execute(socket.id);
+      // Lock to prevent concurrent assignments overwriting each other
+      const release = await lobbyLock.acquire();
+      try {
+        const lobby = await assignPokemon.execute(socket.id);
 
-      io.to(registry.lobbyRoom).emit(
-        ServerEvent.LOBBY_STATUS,
-        mapLobbyToDTO(lobby),
-      );
+        io.to(registry.lobbyRoom).emit(
+          ServerEvent.LOBBY_STATUS,
+          mapLobbyToDTO(lobby),
+        );
 
-      handlerLogger.info('Pokemon assigned');
+        handlerLogger.info('Pokemon assigned');
+      } finally {
+        release();
+      }
     }),
   );
 

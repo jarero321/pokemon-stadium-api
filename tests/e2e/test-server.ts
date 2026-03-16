@@ -114,6 +114,7 @@ export async function createTestServer(): Promise<TestServer> {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    lobbyLock,
     eventBus,
     tokenService,
     logger,
