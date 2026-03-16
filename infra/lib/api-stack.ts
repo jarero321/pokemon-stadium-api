@@ -59,6 +59,8 @@ export class ApiStack extends cdk.Stack {
             NODE_ENV: 'production',
             POKEMON_API_BASE_URL:
               'https://pokemon-api-92034153384.us-central1.run.app',
+            CORS_ORIGIN:
+              'https://main.d282vmmjhmj9t.amplifyapp.com,http://localhost:3000',
           },
           secrets: {
             MONGODB_URI: ecs.Secret.fromSecretsManager(mongoUri),
