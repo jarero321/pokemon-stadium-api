@@ -60,10 +60,10 @@ export class FrontendStack extends cdk.Stack {
       }),
     });
 
-    // ── Auto-build on push to main ───────────────────────────
-    new amplify.CfnBranch(this, 'MainBranch', {
+    // ── Auto-build on push to develop ─────────────────────────
+    new amplify.CfnBranch(this, 'DevelopBranch', {
       appId: app.attrAppId,
-      branchName: 'main',
+      branchName: 'develop',
       enableAutoBuild: true,
       framework: 'Next.js - SSR',
     });
@@ -75,7 +75,7 @@ export class FrontendStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'AmplifyUrl', {
-      value: `https://main.${app.attrDefaultDomain}`,
+      value: `https://develop.${app.attrDefaultDomain}`,
       description: 'Frontend URL',
     });
   }

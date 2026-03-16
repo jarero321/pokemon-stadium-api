@@ -8,3 +8,6 @@ dist
 coverage
 .vscode
 .idea
+infra
+cdk.out
+tests
