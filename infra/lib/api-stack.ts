@@ -19,19 +19,18 @@ export class ApiStack extends cdk.Stack {
     // ── Default VPC (no custom networking needed) ────────────
     const vpc = ec2.Vpc.fromLookup(this, 'DefaultVpc', { isDefault: true });
 
-    // ── Secrets ──────────────────────────────────────────────
-    const mongoUri = new secretsmanager.Secret(this, 'MongoDbUri', {
-      secretName: 'pokemon-stadium/mongodb-uri',
-      description: 'MongoDB Atlas connection string',
-    });
+    // ── Secrets (created manually, imported by full ARN) ──────
+    const mongoUri = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'MongoDbUri',
+      'arn:aws:secretsmanager:us-east-1:594474086473:secret:pokemon-stadium/mongodb-uri-uf5QaX',
+    );
 
-    const jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
-      secretName: 'pokemon-stadium/jwt-secret',
-      generateSecretString: {
-        passwordLength: 64,
-        excludePunctuation: true,
-      },
-    });
+    const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(
+      this,
+      'JwtSecret',
+      'arn:aws:secretsmanager:us-east-1:594474086473:secret:pokemon-stadium/jwt-secret-FYV2uu',
+    );
 
     // ── ECS Cluster ──────────────────────────────────────────
     const cluster = new ecs.Cluster(this, 'Cluster', {
@@ -68,6 +67,10 @@ export class ApiStack extends cdk.Stack {
         },
       },
     );
+
+    // Grant ECS task execution role access to read secrets
+    mongoUri.grantRead(service.taskDefinition.executionRole!);
+    jwtSecret.grantRead(service.taskDefinition.executionRole!);
 
     // ALB health check against Fastify endpoint
     service.targetGroup.configureHealthCheck({
