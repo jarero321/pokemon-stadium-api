@@ -63,9 +63,18 @@ export function registerLobbyHandler(
         return;
       }
 
-      const lobby = await joinLobby.execute(nickname, socket.id);
-
+      // Register BEFORE execute to prevent race condition where two
+      // sockets with the same nickname both pass the check above
       registry.register(socket, nickname);
+
+      let lobby;
+      try {
+        lobby = await joinLobby.execute(nickname, socket.id);
+      } catch (err) {
+        registry.unregister(socket);
+        throw err;
+      }
+
       io.to(registry.lobbyRoom).emit(
         ServerEvent.LOBBY_STATUS,
         mapLobbyToDTO(lobby),
