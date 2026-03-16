@@ -3,7 +3,8 @@ import type { ILogger } from '@core/interfaces/index';
 import type { JoinLobby } from '@application/use-cases/JoinLobby';
 import type { AssignPokemon } from '@application/use-cases/AssignPokemon';
 import type { PlayerReady } from '@application/use-cases/PlayerReady';
-import type { ITurnLock } from '@core/interfaces/index';
+import type { ITurnLock, ILobbyRepository } from '@core/interfaces/index';
+import { LobbyStatus } from '@core/enums/index';
 import type { PlayerConnectionRegistry } from '../PlayerConnectionRegistry';
 import { ClientEvent, ServerEvent } from '../SocketEvents';
 import { withErrorBoundary } from '../withErrorBoundary';
@@ -15,6 +16,7 @@ interface LobbyHandlerDependencies {
   assignPokemon: AssignPokemon;
   playerReady: PlayerReady;
   lobbyLock: ITurnLock;
+  lobbyRepository: ILobbyRepository;
   registry: PlayerConnectionRegistry;
   logger: ILogger;
 }
@@ -61,6 +63,26 @@ export function registerLobbyHandler(
           rejectedSocketId: socket.id,
         });
         return;
+      }
+
+      // Clean stale lobbies: if existing lobby has players whose sockets
+      // are no longer connected, finish that lobby so a fresh one is created
+      const staleLobby = await dependencies.lobbyRepository.findActive();
+      if (staleLobby && staleLobby.status === LobbyStatus.WAITING) {
+        const hasDisconnectedPlayers = staleLobby.players.some(
+          (p) => !registry.isNicknameConnected(p.nickname),
+        );
+        if (hasDisconnectedPlayers) {
+          await dependencies.lobbyRepository.update({
+            ...staleLobby,
+            status: LobbyStatus.FINISHED,
+            updatedAt: new Date(),
+          });
+          handlerLogger.info('Cleaned stale lobby with disconnected players', {
+            lobbyId: staleLobby._id,
+            stalePlayers: staleLobby.players.map((p) => p.nickname),
+          });
+        }
       }
 
       // Register BEFORE execute to prevent race condition where two
