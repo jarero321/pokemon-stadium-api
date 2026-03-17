@@ -34,12 +34,13 @@ export class SwitchPokemon {
     const release = await this.turnLock.acquire();
 
     try {
-      return await this.runner.run(requestId, async (session) => {
+      const { result } = await this.runner.run(requestId, async (session) => {
         const lobby = await this.lobbyRepository.findActive(session);
         if (!lobby) throw new LobbyNotFoundError();
 
         return this.processSwitch(playerId, targetPokemonIndex, lobby, session);
       });
+      return result;
     } finally {
       release();
     }

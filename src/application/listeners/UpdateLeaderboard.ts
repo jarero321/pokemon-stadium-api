@@ -11,16 +11,32 @@ export class UpdateLeaderboard {
   ) {}
 
   async handle(event: BattleFinishedEvent): Promise<void> {
-    await this.runner.run(event.correlationId, async (session) => {
-      await this.playerRepository.addWin(event.winner, event.battleId, session);
-      await this.playerRepository.addLoss(event.loser, event.battleId, session);
+    const { fromCache } = await this.runner.run(
+      event.correlationId,
+      async (session) => {
+        await this.playerRepository.addWin(
+          event.winner,
+          event.battleId,
+          session,
+        );
+        await this.playerRepository.addLoss(
+          event.loser,
+          event.battleId,
+          session,
+        );
 
-      this.logger.info('Leaderboard updated', {
-        winner: event.winner,
-        loser: event.loser,
-        battleId: event.battleId,
+        this.logger.info('Leaderboard updated', {
+          winner: event.winner,
+          loser: event.loser,
+          battleId: event.battleId,
+          correlationId: event.correlationId,
+        });
+      },
+    );
+    if (fromCache) {
+      this.logger.debug('Leaderboard update was cached (idempotent)', {
         correlationId: event.correlationId,
       });
-    });
+    }
   }
 }

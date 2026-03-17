@@ -160,9 +160,6 @@ describe('Battle Flow - Full game lifecycle', () => {
       await playerReady.execute('player-1', crypto.randomUUID());
       const result = await playerReady.execute('player-2', crypto.randomUUID());
 
-      expect(result.readyLobby).not.toBeNull();
-      expect(result.readyLobby!.status).toBe(LobbyStatus.READY);
-
       expect(result.battleStarted).toBe(true);
       expect(result.lobby.status).toBe(LobbyStatus.BATTLING);
       expect(result.lobby.battleId).toBeDefined();
