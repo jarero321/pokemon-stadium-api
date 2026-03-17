@@ -18,6 +18,7 @@ import { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
+import { CheckNicknameAvailability } from '@application/use-cases/CheckNicknameAvailability';
 import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import type { BattleFinishedEvent } from '@core/events/index';
 import { createHttpServer } from '@infrastructure/http/server';
@@ -93,6 +94,9 @@ async function bootstrap() {
     tokenService,
     logger,
   );
+  const checkNicknameAvailability = new CheckNicknameAvailability(
+    lobbyRepository,
+  );
 
   // Event listeners
   const updateLeaderboard = new UpdateLeaderboard(
@@ -112,7 +116,7 @@ async function bootstrap() {
     getPlayerHistory,
     registerPlayer,
     tokenService,
-    lobbyRepository,
+    checkNicknameAvailability,
     logger,
     corsOrigin: env.CORS_ORIGIN,
   });

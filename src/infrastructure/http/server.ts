@@ -3,8 +3,9 @@ import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import type { ILogger, ILobbyRepository } from '@core/interfaces/index';
+import type { ILogger } from '@core/interfaces/index';
 import type { ITokenService } from '@core/interfaces/index';
+import type { CheckNicknameAvailability } from '@application/use-cases/CheckNicknameAvailability';
 import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import type { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
@@ -19,14 +20,19 @@ interface HttpServerDependencies {
   getPlayerHistory: GetPlayerHistory;
   registerPlayer: RegisterPlayer;
   tokenService: ITokenService;
-  lobbyRepository: ILobbyRepository;
+  checkNicknameAvailability: CheckNicknameAvailability;
   logger: ILogger;
   corsOrigin: string;
 }
 
 export async function createHttpServer(dependencies: HttpServerDependencies) {
-  const { logger, tokenService, lobbyRepository, corsOrigin, ...useCases } =
-    dependencies;
+  const {
+    logger,
+    tokenService,
+    checkNicknameAvailability,
+    corsOrigin,
+    ...useCases
+  } = dependencies;
 
   const app = Fastify({ logger: false });
 
@@ -86,7 +92,11 @@ export async function createHttpServer(dependencies: HttpServerDependencies) {
     done();
   });
 
-  await registerRoutes(app, { ...useCases, tokenService, lobbyRepository });
+  await registerRoutes(app, {
+    ...useCases,
+    tokenService,
+    checkNicknameAvailability,
+  });
 
   return app;
 }

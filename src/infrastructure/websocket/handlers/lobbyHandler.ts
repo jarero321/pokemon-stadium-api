@@ -50,17 +50,11 @@ export function registerLobbyHandler(
         return;
       }
 
-      // Reject new socket if the nickname already has an active session
-      const existingSocket = registry.getSocketByNickname(nickname);
-      if (existingSocket && existingSocket.id !== socket.id) {
+      // Reject if another socket with the same nickname is already connected
+      if (registry.isNicknameConnected(nickname)) {
         socket.emit(ServerEvent.ERROR, {
-          code: 'SESSION_REPLACED',
-          message: 'This trainer already has an active session',
-        });
-        handlerLogger.info('Duplicate nickname rejected', {
-          nickname,
-          existingSocketId: existingSocket.id,
-          rejectedSocketId: socket.id,
+          code: 'NICKNAME_IN_USE',
+          message: 'This nickname is already in an active session',
         });
         return;
       }
@@ -146,10 +140,12 @@ export function registerLobbyHandler(
         return;
       }
 
-      const { lobby, battleStarted } = await playerReady.execute(
+      const { lobby, battleStarted, fromCache } = await playerReady.execute(
         socket.id,
         crypto.randomUUID(),
       );
+
+      if (fromCache) return; // Skip re-emitting events for cached results
 
       // Single lobby_status with the final state (WAITING or BATTLING)
       // The intermediate READY state is transient and not useful to clients
