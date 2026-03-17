@@ -388,7 +388,7 @@ describe('Battle Sync E2E', () => {
     }
   });
 
-  // Duplicate nickname blocked when session is active
+  // Duplicate nickname blocked at registration when in active lobby
   it('should reject duplicate nickname when original session is active', async () => {
     const p1 = await registerPlayer(server.url, 'Ash');
     const s1 = createSocket(server.url, p1.token);
@@ -398,18 +398,20 @@ describe('Battle Sync E2E', () => {
       s1.emit('join_lobby');
       await waitForEvent(s1, 'lobby_status');
 
-      // Another connection tries same nickname
-      const p1Dup = await registerPlayer(server.url, 'Ash');
-      const s1Dup = createSocket(server.url, p1Dup.token);
-      await waitForEvent(s1Dup, 'connect');
+      // Another registration with same nickname — blocked at REST level
+      const res = await fetch(`${server.url}/api/players/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: 'Ash' }),
+      });
+      const json = (await res.json()) as {
+        success: boolean;
+        error?: { code: string };
+      };
 
-      const errorPromise = waitForEvent<{ code: string }>(s1Dup, 'error');
-      s1Dup.emit('join_lobby');
-      const error = await errorPromise;
-
-      expect(error.code).toBe('LOBBY_FULL');
-
-      s1Dup.disconnect();
+      expect(res.status).toBe(409);
+      expect(json.success).toBe(false);
+      expect(json.error?.code).toBe('NICKNAME_IN_USE');
     } finally {
       s1.disconnect();
     }
