@@ -50,6 +50,15 @@ export function registerLobbyHandler(
         return;
       }
 
+      // Reject if another socket with the same nickname is already connected
+      if (registry.isNicknameConnected(nickname)) {
+        socket.emit(ServerEvent.ERROR, {
+          code: 'NICKNAME_IN_USE',
+          message: 'This nickname is already in an active session',
+        });
+        return;
+      }
+
       // Clean stale lobbies: if ANY active lobby has players whose sockets
       // are no longer connected, finish it so a fresh one can be created
       const staleLobby = await dependencies.lobbyRepository.findActive();
