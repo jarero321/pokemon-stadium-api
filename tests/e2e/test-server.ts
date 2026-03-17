@@ -101,6 +101,7 @@ export async function createTestServer(): Promise<TestServer> {
     getPlayerHistory,
     registerPlayer,
     tokenService,
+    lobbyRepository,
     logger,
     corsOrigin: '*',
   });

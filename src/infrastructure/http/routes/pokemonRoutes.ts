@@ -4,7 +4,7 @@ import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import type { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import type { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
-import type { ITokenService } from '@core/interfaces/index';
+import type { ITokenService, ILobbyRepository } from '@core/interfaces/index';
 import { createAuthHook } from '../middlewares/authHook';
 import { ok, fail } from '../ApiResponse';
 
@@ -14,6 +14,7 @@ interface RouteDependencies {
   getPlayerHistory: GetPlayerHistory;
   registerPlayer: RegisterPlayer;
   tokenService: ITokenService;
+  lobbyRepository: ILobbyRepository;
 }
 
 const apiResponseSchema = (dataSchema: Record<string, unknown>) => ({
@@ -54,6 +55,7 @@ export async function registerRoutes(
     getPlayerHistory,
     registerPlayer,
     tokenService,
+    lobbyRepository,
   } = dependencies;
 
   const authHook = createAuthHook(tokenService);
@@ -104,8 +106,26 @@ export async function registerRoutes(
         },
       },
     },
-    async (request) => {
-      const result = await registerPlayer.execute(request.body.nickname);
+    async (request, reply) => {
+      const nickname = request.body.nickname.trim();
+
+      // Block registration if nickname is in an active lobby
+      const activeLobby = await lobbyRepository.findActive();
+      if (activeLobby) {
+        const isInLobby = activeLobby.players.some(
+          (p) => p.nickname === nickname,
+        );
+        if (isInLobby) {
+          reply.status(409);
+          return fail(
+            'NICKNAME_IN_USE',
+            'This nickname is currently in a battle or lobby. Try a different name.',
+            request.traceId,
+          );
+        }
+      }
+
+      const result = await registerPlayer.execute(nickname);
       return ok(result, request.traceId);
     },
   );

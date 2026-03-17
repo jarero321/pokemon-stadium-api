@@ -112,6 +112,7 @@ async function bootstrap() {
     getPlayerHistory,
     registerPlayer,
     tokenService,
+    lobbyRepository,
     logger,
     corsOrigin: env.CORS_ORIGIN,
   });

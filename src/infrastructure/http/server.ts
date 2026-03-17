@@ -3,7 +3,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
-import type { ILogger } from '@core/interfaces/index';
+import type { ILogger, ILobbyRepository } from '@core/interfaces/index';
 import type { ITokenService } from '@core/interfaces/index';
 import type { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import type { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
@@ -19,12 +19,14 @@ interface HttpServerDependencies {
   getPlayerHistory: GetPlayerHistory;
   registerPlayer: RegisterPlayer;
   tokenService: ITokenService;
+  lobbyRepository: ILobbyRepository;
   logger: ILogger;
   corsOrigin: string;
 }
 
 export async function createHttpServer(dependencies: HttpServerDependencies) {
-  const { logger, tokenService, corsOrigin, ...useCases } = dependencies;
+  const { logger, tokenService, lobbyRepository, corsOrigin, ...useCases } =
+    dependencies;
 
   const app = Fastify({ logger: false });
 
@@ -84,7 +86,7 @@ export async function createHttpServer(dependencies: HttpServerDependencies) {
     done();
   });
 
-  await registerRoutes(app, { ...useCases, tokenService });
+  await registerRoutes(app, { ...useCases, tokenService, lobbyRepository });
 
   return app;
 }
