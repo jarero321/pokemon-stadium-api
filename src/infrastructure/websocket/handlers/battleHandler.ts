@@ -8,6 +8,8 @@ import { withErrorBoundary } from '../withErrorBoundary';
 import { mapLobbyToDTO } from '@application/mappers/mapLobbyToDTO';
 import { attackSchema, switchPokemonSchema } from '../schemas';
 
+const FORCED_SWITCH_TIMEOUT_MS = 30_000;
+
 interface BattleHandlerDependencies {
   io: Server;
   executeAttack: ExecuteAttack;
@@ -23,6 +25,14 @@ export function registerBattleHandler(
   const { io, executeAttack, switchPokemon, registry, logger } = dependencies;
 
   const handlerLogger = logger.child({ socketId: socket.id });
+  let forcedSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearForcedSwitchTimer = () => {
+    if (forcedSwitchTimer) {
+      clearTimeout(forcedSwitchTimer);
+      forcedSwitchTimer = null;
+    }
+  };
 
   socket.on(
     ClientEvent.ATTACK,
@@ -76,6 +86,7 @@ export function registerBattleHandler(
       );
 
       if (result.battleEnded) {
+        clearForcedSwitchTimer();
         io.to(registry.lobbyRoom).emit(ServerEvent.BATTLE_END, {
           winner: result.winner,
           loser: result.lobby.players.find(
@@ -86,6 +97,53 @@ export function registerBattleHandler(
 
         registry.clear();
         handlerLogger.info('Battle ended', { winner: result.winner });
+      } else if (
+        result.pokemonDefeated &&
+        result.pokemonDefeated.remainingTeam > 0
+      ) {
+        // Defender must switch — start timeout for auto-switch
+        clearForcedSwitchTimer();
+        const defenderIndex = result.lobby.currentTurnIndex;
+        const defender =
+          defenderIndex !== null ? result.lobby.players[defenderIndex] : null;
+
+        if (defender) {
+          const nextAlive = defender.team.findIndex(
+            (p, i) => !p.defeated && i !== defender.activePokemonIndex,
+          );
+
+          if (nextAlive !== -1) {
+            forcedSwitchTimer = setTimeout(async () => {
+              try {
+                handlerLogger.info('Auto-switching after timeout', {
+                  nickname: defender.nickname,
+                  targetIndex: nextAlive,
+                });
+
+                const { lobby: switchedLobby, switchInfo } =
+                  await switchPokemon.execute(
+                    defender.playerId,
+                    nextAlive,
+                    crypto.randomUUID(),
+                  );
+
+                io.to(registry.lobbyRoom).emit(
+                  ServerEvent.POKEMON_SWITCH,
+                  switchInfo,
+                );
+                io.to(registry.lobbyRoom).emit(
+                  ServerEvent.LOBBY_STATUS,
+                  mapLobbyToDTO(switchedLobby),
+                );
+              } catch (err) {
+                handlerLogger.error(
+                  'Auto-switch failed',
+                  err instanceof Error ? err : new Error(String(err)),
+                );
+              }
+            }, FORCED_SWITCH_TIMEOUT_MS);
+          }
+        }
       }
     }),
   );
@@ -109,6 +167,9 @@ export function registerBattleHandler(
         });
         return;
       }
+
+      // Player switched manually — cancel auto-switch timer
+      clearForcedSwitchTimer();
 
       const { lobby, switchInfo } = await switchPokemon.execute(
         socket.id,
