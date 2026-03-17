@@ -50,21 +50,6 @@ export function registerLobbyHandler(
         return;
       }
 
-      // Reject new socket if the nickname already has an active session
-      const existingSocket = registry.getSocketByNickname(nickname);
-      if (existingSocket && existingSocket.id !== socket.id) {
-        socket.emit(ServerEvent.ERROR, {
-          code: 'SESSION_REPLACED',
-          message: 'This trainer already has an active session',
-        });
-        handlerLogger.info('Duplicate nickname rejected', {
-          nickname,
-          existingSocketId: existingSocket.id,
-          rejectedSocketId: socket.id,
-        });
-        return;
-      }
-
       // Clean stale lobbies: if ANY active lobby has players whose sockets
       // are no longer connected, finish it so a fresh one can be created
       const staleLobby = await dependencies.lobbyRepository.findActive();
@@ -146,10 +131,12 @@ export function registerLobbyHandler(
         return;
       }
 
-      const { lobby, battleStarted } = await playerReady.execute(
+      const { lobby, battleStarted, fromCache } = await playerReady.execute(
         socket.id,
         crypto.randomUUID(),
       );
+
+      if (fromCache) return; // Skip re-emitting events for cached results
 
       // Single lobby_status with the final state (WAITING or BATTLING)
       // The intermediate READY state is transient and not useful to clients

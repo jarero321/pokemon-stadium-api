@@ -120,12 +120,17 @@ export function registerBattleHandler(
                   targetIndex: nextAlive,
                 });
 
-                const { lobby: switchedLobby, switchInfo } =
-                  await switchPokemon.execute(
-                    defender.playerId,
-                    nextAlive,
-                    crypto.randomUUID(),
-                  );
+                const {
+                  lobby: switchedLobby,
+                  switchInfo,
+                  fromCache: cached,
+                } = await switchPokemon.execute(
+                  defender.playerId,
+                  nextAlive,
+                  crypto.randomUUID(),
+                );
+
+                if (cached) return;
 
                 io.to(registry.lobbyRoom).emit(
                   ServerEvent.POKEMON_SWITCH,
@@ -171,11 +176,13 @@ export function registerBattleHandler(
       // Player switched manually — cancel auto-switch timer
       clearForcedSwitchTimer();
 
-      const { lobby, switchInfo } = await switchPokemon.execute(
+      const { lobby, switchInfo, fromCache } = await switchPokemon.execute(
         socket.id,
         parsed.data.targetPokemonIndex,
         parsed.data.requestId,
       );
+
+      if (fromCache) return; // Skip re-emitting events for cached results
 
       io.to(registry.lobbyRoom).emit(ServerEvent.POKEMON_SWITCH, switchInfo);
 
