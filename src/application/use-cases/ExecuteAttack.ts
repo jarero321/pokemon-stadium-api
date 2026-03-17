@@ -55,12 +55,18 @@ export class ExecuteAttack {
     const release = await this.turnLock.acquire();
 
     try {
-      const result = await this.runner.run(requestId, async (session) => {
-        const lobby = await this.lobbyRepository.findActive(session);
-        if (!lobby) throw new LobbyNotFoundError();
+      const { result, fromCache } = await this.runner.run(
+        requestId,
+        async (session) => {
+          const lobby = await this.lobbyRepository.findActive(session);
+          if (!lobby) throw new LobbyNotFoundError();
 
-        return this.processAttack(playerId, lobby, session);
-      });
+          return this.processAttack(playerId, lobby, session);
+        },
+      );
+
+      // Skip side effects if result came from idempotency cache
+      if (fromCache) return result;
 
       // Emit domain events AFTER transaction commits (avoid nested transactions)
       if (result.battleEnded && result.winner) {

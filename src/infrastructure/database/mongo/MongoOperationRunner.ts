@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import type {
   IOperationRunner,
+  OperationResult,
   TransactionSession,
 } from '@core/interfaces/index';
 import type { ILogger } from '@core/interfaces/index';
@@ -12,16 +13,14 @@ export class MongoOperationRunner implements IOperationRunner {
   async run<T>(
     requestId: string,
     work: (session: TransactionSession) => Promise<T>,
-  ): Promise<T> {
+  ): Promise<OperationResult<T>> {
     const cached = await IdempotencyModel.findOne({ requestId }).lean();
     if (cached) {
       this.logger.debug(
         'Idempotent request detected, returning cached result',
-        {
-          requestId,
-        },
+        { requestId },
       );
-      return cached.result as T;
+      return { result: cached.result as T, fromCache: true };
     }
 
     const session = await mongoose.startSession();
@@ -37,7 +36,7 @@ export class MongoOperationRunner implements IOperationRunner {
 
       this.logger.debug('Transaction committed', { requestId });
 
-      return result;
+      return { result, fromCache: false };
     } catch (error) {
       await session.abortTransaction();
       this.logger.error('Transaction aborted', error as Error, { requestId });
