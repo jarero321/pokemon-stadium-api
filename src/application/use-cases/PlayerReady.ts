@@ -32,97 +32,105 @@ export class PlayerReady {
   ): Promise<{
     lobby: Lobby;
     battleStarted: boolean;
+    fromCache: boolean;
   }> {
-    const { result } = await this.runner.run(requestId, async (session) => {
-      const lobby = await this.lobbyRepository.findActive(session);
-      if (!lobby) throw new LobbyNotFoundError();
+    const { result, fromCache } = await this.runner.run(
+      requestId,
+      async (session) => {
+        const lobby = await this.lobbyRepository.findActive(session);
+        if (!lobby) throw new LobbyNotFoundError();
 
-      if (lobby.status !== LobbyStatus.WAITING) {
-        throw new LobbyNotInStateError(LobbyStatus.WAITING, lobby.status);
-      }
+        if (lobby.status !== LobbyStatus.WAITING) {
+          throw new LobbyNotInStateError(LobbyStatus.WAITING, lobby.status);
+        }
 
-      const requestingPlayer = lobby.players.find(
-        (player) => player.playerId === playerId,
-      );
-      if (!requestingPlayer) throw new PlayerNotInLobbyError();
-
-      if (requestingPlayer.status !== PlayerStatus.TEAM_ASSIGNED) {
-        throw new InvalidPlayerStatusError(
-          PlayerStatus.TEAM_ASSIGNED,
-          requestingPlayer.status,
+        const requestingPlayer = lobby.players.find(
+          (player) => player.playerId === playerId,
         );
-      }
+        if (!requestingPlayer) throw new PlayerNotInLobbyError();
 
-      const updatedRequestingPlayer = setStatus(
-        requestingPlayer,
-        PlayerStatus.READY,
-      );
-      let updatedLobby = updatePlayer(lobby, playerId, updatedRequestingPlayer);
+        if (requestingPlayer.status !== PlayerStatus.TEAM_ASSIGNED) {
+          throw new InvalidPlayerStatusError(
+            PlayerStatus.TEAM_ASSIGNED,
+            requestingPlayer.status,
+          );
+        }
 
-      this.logger.info('Player marked as ready', {
-        nickname: requestingPlayer.nickname,
-      });
-
-      const bothPlayersReady =
-        updatedLobby.players.length === 2 &&
-        updatedLobby.players.every(
-          (player) => player.status === PlayerStatus.READY,
+        const updatedRequestingPlayer = setStatus(
+          requestingPlayer,
+          PlayerStatus.READY,
+        );
+        let updatedLobby = updatePlayer(
+          lobby,
+          playerId,
+          updatedRequestingPlayer,
         );
 
-      if (bothPlayersReady) {
-        const readyLobby = await this.lobbyRepository.update(
-          setLobbyStatus(updatedLobby, LobbyStatus.READY),
-          session,
-        );
-
-        this.logger.info('Both players ready, lobby status set to ready');
-
-        const createdBattle = await this.battleRepository.create(
-          {
-            players: updatedLobby.players.map((player) => ({
-              nickname: player.nickname,
-              team: structuredClone(player.team) as typeof player.team,
-            })),
-            turns: [],
-            winner: null,
-            status: BattleStatus.IN_PROGRESS,
-            startedAt: new Date(),
-            finishedAt: null,
-          },
-          session,
-        );
-
-        updatedLobby = startBattle(
-          updatedLobby,
-          createdBattle._id!,
-          determineFirstTurn(updatedLobby.players),
-          PlayerStatus.BATTLING,
-        );
-
-        this.logger.info('Battle started', {
-          battleId: createdBattle._id,
-          firstTurn:
-            updatedLobby.players[updatedLobby.currentTurnIndex!].nickname,
+        this.logger.info('Player marked as ready', {
+          nickname: requestingPlayer.nickname,
         });
+
+        const bothPlayersReady =
+          updatedLobby.players.length === 2 &&
+          updatedLobby.players.every(
+            (player) => player.status === PlayerStatus.READY,
+          );
+
+        if (bothPlayersReady) {
+          const readyLobby = await this.lobbyRepository.update(
+            setLobbyStatus(updatedLobby, LobbyStatus.READY),
+            session,
+          );
+
+          this.logger.info('Both players ready, lobby status set to ready');
+
+          const createdBattle = await this.battleRepository.create(
+            {
+              players: updatedLobby.players.map((player) => ({
+                nickname: player.nickname,
+                team: structuredClone(player.team) as typeof player.team,
+              })),
+              turns: [],
+              winner: null,
+              status: BattleStatus.IN_PROGRESS,
+              startedAt: new Date(),
+              finishedAt: null,
+            },
+            session,
+          );
+
+          updatedLobby = startBattle(
+            updatedLobby,
+            createdBattle._id!,
+            determineFirstTurn(updatedLobby.players),
+            PlayerStatus.BATTLING,
+          );
+
+          this.logger.info('Battle started', {
+            battleId: createdBattle._id,
+            firstTurn:
+              updatedLobby.players[updatedLobby.currentTurnIndex!].nickname,
+          });
+
+          const finalLobby = await this.lobbyRepository.update(
+            updatedLobby,
+            session,
+          );
+
+          return {
+            lobby: finalLobby,
+            battleStarted: true,
+          };
+        }
 
         const finalLobby = await this.lobbyRepository.update(
           updatedLobby,
           session,
         );
 
-        return {
-          lobby: finalLobby,
-          battleStarted: true,
-        };
-      }
-
-      const finalLobby = await this.lobbyRepository.update(
-        updatedLobby,
-        session,
-      );
-
-      return { lobby: finalLobby, battleStarted: false };
-    });
-    return result;
+        return { lobby: finalLobby, battleStarted: false };
+      },
+    );
+    return { ...result, fromCache };
   }
 }
