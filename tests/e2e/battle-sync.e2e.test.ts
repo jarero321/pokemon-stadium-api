@@ -407,7 +407,7 @@ describe('Battle Sync E2E', () => {
       s1Dup.emit('join_lobby');
       const error = await errorPromise;
 
-      expect(error.code).toBe('SESSION_REPLACED');
+      expect(error.code).toBe('LOBBY_FULL');
 
       s1Dup.disconnect();
     } finally {
