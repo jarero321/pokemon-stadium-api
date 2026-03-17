@@ -1,5 +1,4 @@
 import type { ILobbyRepository } from '@core/interfaces/index';
-import { LobbyStatus } from '@core/enums/index';
 
 export class CheckNicknameAvailability {
   constructor(private readonly lobbyRepository: ILobbyRepository) {}
@@ -10,14 +9,13 @@ export class CheckNicknameAvailability {
     const activeLobby = await this.lobbyRepository.findActive();
     if (!activeLobby) return { available: true };
 
-    const isInBattle =
-      activeLobby.players.some((p) => p.nickname === nickname) &&
-      activeLobby.status === LobbyStatus.BATTLING;
+    const isInLobby = activeLobby.players.some((p) => p.nickname === nickname);
 
-    if (isInBattle) {
+    if (isInLobby) {
       return {
         available: false,
-        reason: 'This nickname is currently in a battle. Try a different name.',
+        reason:
+          'This nickname is currently in a lobby or battle. Try a different name.',
       };
     }
 
