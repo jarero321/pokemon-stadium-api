@@ -15,6 +15,7 @@ import { mapLobbyToDTO } from '@application/mappers/mapLobbyToDTO';
 import { LobbyStatus } from '@core/enums/index';
 import type {
   ILobbyRepository,
+  IBattleRepository,
   ITokenService,
   IEventBus,
   ITurnLock,
@@ -28,6 +29,7 @@ interface SocketServerDependencies {
   executeAttack: ExecuteAttack;
   switchPokemon: SwitchPokemon;
   lobbyRepository: ILobbyRepository;
+  battleRepository: IBattleRepository;
   lobbyLock: ITurnLock;
   eventBus: IEventBus;
   tokenService: ITokenService;
@@ -53,6 +55,7 @@ export function createSocketServer(
   const {
     logger,
     lobbyRepository,
+    battleRepository,
     lobbyLock,
     eventBus,
     tokenService,
@@ -86,6 +89,7 @@ export function createSocketServer(
       assignPokemon: useCases.assignPokemon,
       playerReady: useCases.playerReady,
       lobbyLock,
+      lobbyRepository,
       registry,
       logger: connectionLogger,
     });
@@ -165,6 +169,11 @@ export function createSocketServer(
             loser: disconnectedNickname,
             reason: 'opponent_disconnected',
           });
+
+          // Finish the battle record in DB
+          if (winner && activeLobby.battleId) {
+            await battleRepository.finish(activeLobby.battleId, winner);
+          }
 
           // Update leaderboard stats for forfeit
           if (winner && activeLobby.battleId) {

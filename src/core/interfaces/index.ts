@@ -10,4 +10,8 @@ export type {
   PokemonDetail,
 } from './IPokemonApiService';
 export type { ITokenService, TokenPayload } from './ITokenService';
-export type { IOperationRunner, TransactionSession } from './IOperationRunner';
+export type {
+  IOperationRunner,
+  OperationResult,
+  TransactionSession,
+} from './IOperationRunner';

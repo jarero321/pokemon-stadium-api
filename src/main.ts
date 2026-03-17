@@ -112,6 +112,7 @@ async function bootstrap() {
     getPlayerHistory,
     registerPlayer,
     tokenService,
+    lobbyRepository,
     logger,
     corsOrigin: env.CORS_ORIGIN,
   });
@@ -126,6 +127,7 @@ async function bootstrap() {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    battleRepository,
     lobbyLock,
     eventBus,
     tokenService,

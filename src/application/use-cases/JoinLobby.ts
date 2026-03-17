@@ -57,30 +57,22 @@ export class JoinLobby {
       throw new LobbyNotInStateError(LobbyStatus.WAITING, activeLobby.status);
     }
 
-    // Reconnection: if the nickname is already in the lobby, update their playerId
+    // Check if nickname is already in the lobby
     const existingPlayer = activeLobby.players.find(
       (player) => player.nickname === nickname,
     );
 
     if (existingPlayer) {
-      const reconnected = {
-        ...existingPlayer,
-        playerId,
-      };
-      const updatedLobby = updatePlayer(
-        activeLobby,
-        existingPlayer.playerId,
-        reconnected,
-      );
-      const persisted = await this.lobbyRepository.update(updatedLobby);
+      // Same playerId = same socket reconnecting (allowed)
+      if (existingPlayer.playerId === playerId) {
+        this.logger.info('Player already in lobby, returning current state', {
+          nickname,
+        });
+        return activeLobby;
+      }
 
-      this.logger.info('Player reconnected to lobby', {
-        nickname,
-        oldPlayerId: existingPlayer.playerId,
-        newPlayerId: playerId,
-      });
-
-      return persisted;
+      // Different playerId = different person with same nickname (reject)
+      throw new LobbyFullError();
     }
 
     if (activeLobby.players.length >= MAX_PLAYERS_PER_LOBBY) {

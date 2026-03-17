@@ -101,6 +101,7 @@ export async function createTestServer(): Promise<TestServer> {
     getPlayerHistory,
     registerPlayer,
     tokenService,
+    lobbyRepository,
     logger,
     corsOrigin: '*',
   });
@@ -114,6 +115,7 @@ export async function createTestServer(): Promise<TestServer> {
     executeAttack,
     switchPokemon,
     lobbyRepository,
+    battleRepository,
     lobbyLock,
     eventBus,
     tokenService,

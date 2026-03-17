@@ -32,9 +32,8 @@ export class PlayerReady {
   ): Promise<{
     lobby: Lobby;
     battleStarted: boolean;
-    readyLobby: Lobby | null;
   }> {
-    return this.runner.run(requestId, async (session) => {
+    const { result } = await this.runner.run(requestId, async (session) => {
       const lobby = await this.lobbyRepository.findActive(session);
       if (!lobby) throw new LobbyNotFoundError();
 
@@ -114,7 +113,6 @@ export class PlayerReady {
         return {
           lobby: finalLobby,
           battleStarted: true,
-          readyLobby,
         };
       }
 
@@ -123,7 +121,8 @@ export class PlayerReady {
         session,
       );
 
-      return { lobby: finalLobby, battleStarted: false, readyLobby: null };
+      return { lobby: finalLobby, battleStarted: false };
     });
+    return result;
   }
 }
