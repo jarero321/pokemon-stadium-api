@@ -11,7 +11,15 @@ export class PlayerConnectionRegistry {
   }
 
   isNicknameConnected(nickname: string): boolean {
-    return this.nicknameToSocket.has(nickname);
+    const socket = this.nicknameToSocket.get(nickname);
+    if (!socket) return false;
+    // Verify the socket is actually alive, not just in the Map
+    if (!socket.connected) {
+      this.nicknameToSocket.delete(nickname);
+      this.socketToNickname.delete(socket.id);
+      return false;
+    }
+    return true;
   }
 
   register(socket: Socket, nickname: string): void {
@@ -37,7 +45,13 @@ export class PlayerConnectionRegistry {
   }
 
   getSocketByNickname(nickname: string): Socket | null {
-    return this.nicknameToSocket.get(nickname) ?? null;
+    const socket = this.nicknameToSocket.get(nickname) ?? null;
+    if (socket && !socket.connected) {
+      this.nicknameToSocket.delete(nickname);
+      this.socketToNickname.delete(socket.id);
+      return null;
+    }
+    return socket;
   }
 
   getConnectedCount(): number {
