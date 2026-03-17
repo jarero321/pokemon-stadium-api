@@ -17,6 +17,7 @@ import { GetPokemonCatalog } from '@application/use-cases/GetPokemonCatalog';
 import { GetLeaderboard } from '@application/use-cases/GetLeaderboard';
 import { GetPlayerHistory } from '@application/use-cases/GetPlayerHistory';
 import { RegisterPlayer } from '@application/use-cases/RegisterPlayer';
+import { CheckNicknameAvailability } from '@application/use-cases/CheckNicknameAvailability';
 import { UpdateLeaderboard } from '@application/listeners/UpdateLeaderboard';
 import { createHttpServer } from '@infrastructure/http/server';
 import { createSocketServer } from '@infrastructure/websocket/socketServer';
@@ -85,6 +86,9 @@ export async function createTestServer(): Promise<TestServer> {
     tokenService,
     logger,
   );
+  const checkNicknameAvailability = new CheckNicknameAvailability(
+    lobbyRepository,
+  );
 
   const updateLeaderboard = new UpdateLeaderboard(
     playerRepository,
@@ -101,7 +105,7 @@ export async function createTestServer(): Promise<TestServer> {
     getPlayerHistory,
     registerPlayer,
     tokenService,
-    lobbyRepository,
+    checkNicknameAvailability,
     logger,
     corsOrigin: '*',
   });

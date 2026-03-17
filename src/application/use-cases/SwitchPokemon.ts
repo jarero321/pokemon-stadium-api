@@ -28,19 +28,31 @@ export class SwitchPokemon {
     playerId: string,
     targetPokemonIndex: number,
     requestId: string,
-  ): Promise<{ lobby: Lobby; switchInfo: PokemonSwitchDTO }> {
+  ): Promise<{
+    lobby: Lobby;
+    switchInfo: PokemonSwitchDTO;
+    fromCache: boolean;
+  }> {
     guardNonEmptyString(playerId, 'playerId');
     guardNonNegativeInteger(targetPokemonIndex, 'targetPokemonIndex');
     const release = await this.turnLock.acquire();
 
     try {
-      const { result } = await this.runner.run(requestId, async (session) => {
-        const lobby = await this.lobbyRepository.findActive(session);
-        if (!lobby) throw new LobbyNotFoundError();
+      const { result, fromCache } = await this.runner.run(
+        requestId,
+        async (session) => {
+          const lobby = await this.lobbyRepository.findActive(session);
+          if (!lobby) throw new LobbyNotFoundError();
 
-        return this.processSwitch(playerId, targetPokemonIndex, lobby, session);
-      });
-      return result;
+          return this.processSwitch(
+            playerId,
+            targetPokemonIndex,
+            lobby,
+            session,
+          );
+        },
+      );
+      return { ...result, fromCache };
     } finally {
       release();
     }
